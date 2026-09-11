@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive } from 'vue'
-import { getCashlinkStatus } from '../lib/cashlink'
+import { getKashlinkStatus } from '../lib/kashlink'
 import { formatDate, formatNim } from '../lib/format'
 import type { StoredLink } from '../lib/storage'
 
@@ -12,7 +12,7 @@ const statuses = reactive<Record<string, string>>({})
 
 onMounted(() => {
   for (const link of props.links) {
-    getCashlinkStatus(link.address)
+    getKashlinkStatus(link.address)
       .then(({ status }) => (statuses[link.address] = labels[status]))
       .catch(() => (statuses[link.address] = ''))
   }
@@ -21,9 +21,9 @@ onMounted(() => {
 
 <template>
   <div class="overlay" @click.self="emit('close')">
-    <section class="sheet" role="dialog" aria-label="Your Cash Links">
+    <section class="sheet" role="dialog" aria-label="Your KashLinks">
       <div class="handle" />
-      <h2>Your Cash Links</h2>
+      <h2>Your KashLinks</h2>
       <ul>
         <li v-for="link in links" :key="link.address">
           <button @click="emit('open', link)">

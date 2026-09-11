@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { getCashlinkStatus, shareUrl, sweepCashlink } from '../lib/cashlink'
+import { getKashlinkStatus, shareUrl, sweepKashlink } from '../lib/kashlink'
 import { formatDate, formatNim, formatUsd, lunaToUsd, nimAmount } from '../lib/format'
 import { errorMessage, getPayoutAddress } from '../lib/provider'
 import type { StoredLink } from '../lib/storage'
@@ -10,7 +10,7 @@ const props = defineProps<{ link: StoredLink, rate: number | null }>()
 const emit = defineEmits<{ close: [] }>()
 
 const url = computed(() => shareUrl(props.link.secret))
-const shareText = computed(() => `I sent you ${formatNim(props.link.value)} with a Nimiq Cash Link. Open it in Nimiq Pay to claim:`)
+const shareText = computed(() => `I sent you ${formatNim(props.link.value)} with a Nimiq KashLink. Open it in Nimiq Pay to claim:`)
 const whatsappUrl = computed(() => `https://wa.me/?text=${encodeURIComponent(`${shareText.value} ${url.value}`)}`)
 
 const copied = ref(false)
@@ -22,7 +22,7 @@ const claimed = ref(false)
 const error = ref<string | null>(null)
 
 onMounted(() => {
-  getCashlinkStatus(props.link.address)
+  getKashlinkStatus(props.link.address)
     .then(({ status }) => (claimed.value = status === 'claimed'))
     .catch(() => {})
 })
@@ -47,7 +47,7 @@ async function copy() {
 async function share() {
   if (navigator.share) {
     try {
-      await navigator.share({ title: 'Cash Link', text: shareText.value, url: url.value })
+      await navigator.share({ title: 'KashLink', text: shareText.value, url: url.value })
     }
     catch {
       // user closed the share sheet
@@ -65,7 +65,7 @@ async function revert() {
   reverting.value = true
   error.value = null
   try {
-    await sweepCashlink(props.link.secret, await getPayoutAddress())
+    await sweepKashlink(props.link.secret, await getPayoutAddress())
     reverted.value = true
   }
   catch (e) {
@@ -80,14 +80,14 @@ async function revert() {
 
 <template>
   <div class="overlay" @click.self="emit('close')">
-    <section class="sheet" role="dialog" aria-label="Your Cash Link">
+    <section class="sheet" role="dialog" aria-label="Your KashLink">
       <div class="handle" />
 
       <span class="badge" :class="{ done: reverted || claimed }">
         <Icon :name="reverted || claimed ? 'check' : 'link'" :size="26" />
       </span>
       <p class="heading">
-        {{ reverted ? 'Cash Link reverted' : claimed ? 'Cash Link claimed' : 'Your Cash Link is ready!' }}
+        {{ reverted ? 'KashLink reverted' : claimed ? 'KashLink claimed' : 'Your KashLink is ready!' }}
       </p>
       <div class="amount">
         <span>{{ nimAmount(link.value) }}</span><span class="unit">NIM</span>
@@ -101,7 +101,7 @@ async function revert() {
 
       <template v-if="!reverted && !claimed">
         <p class="label">
-          Share your Cash Link
+          Share your KashLink
         </p>
         <div class="url-row">
           <span class="url">{{ url }}</span>

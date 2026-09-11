@@ -1,10 +1,10 @@
 # KashLink
 
-A Cash Link mini app for Nimiq Pay.
+A KashLink mini app for Nimiq Pay.
 
-Send NIM to anyone with a link, like MiniPay's Cash Link.
+Send NIM to anyone with a link, like MiniPay's KashLink.
 
-**Flow:** How it works → Amount → Send to Cash Link → "Your Cash Link is ready" (share / copy / WhatsApp / revert).
+**Flow:** How it works → Amount → Send to KashLink → "Your KashLink is ready" (share / copy / WhatsApp / revert).
 Whoever opens the link inside Nimiq Pay taps **Claim cash** and the NIM moves to their wallet.
 
 ## How it works
@@ -16,7 +16,7 @@ Whoever opens the link inside Nimiq Pay taps **Claim cash** and the NIM moves to
    their own address (`listAccounts`), and broadcasts it with the in-browser Nimiq light client.
    NIM transactions are free, so the link never needs gas.
 4. **Revert** does the same sweep back to your address. Created links are kept in `localStorage` on your
-   device (tap "Your Cash Links" on the first screen) so you can revert later.
+   device (tap "Your KashLinks" on the first screen) so you can revert later.
 
 Links use the same encoding as the Nimiq Hub, so someone without Nimiq Pay can also claim at
 `hub.nimiq.com/cashlink/#…` (the claim screen offers this automatically in a normal browser).

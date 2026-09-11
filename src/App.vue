@@ -6,7 +6,7 @@ import IntroScreen from './components/IntroScreen.vue'
 import LinksSheet from './components/LinksSheet.vue'
 import ReadySheet from './components/ReadySheet.vue'
 import ReviewScreen from './components/ReviewScreen.vue'
-import { createCashlink } from './lib/cashlink'
+import { createKashlink } from './lib/kashlink'
 import { getNimUsdRate } from './lib/fiat'
 import type { Currency } from './lib/format'
 import { getClient, getTotalBalance, loadNimiq, USES_RPC } from './lib/nimiq'
@@ -40,7 +40,7 @@ const readyLink = ref<StoredLink | null>(null)
 const showLinks = ref(false)
 
 onMounted(() => {
-  // Tapping another Cash Link while KashLink is already open in Nimiq Pay only changes the #hash,
+  // Tapping another KashLink while KashLink is already open in Nimiq Pay only changes the #hash,
   // without reloading the page, so switch to that link's claim screen here.
   window.addEventListener('hashchange', () => {
     const secret = secretFromHash()
@@ -90,14 +90,14 @@ async function send() {
   let link: StoredLink | null = null
   try {
     const provider = await getProvider()
-    const cashlink = await createCashlink(amountLuna.value)
-    link = { secret: cashlink.secret, address: cashlink.address, value: cashlink.value, createdAt: Date.now() }
+    const kashlink = await createKashlink(amountLuna.value)
+    link = { secret: kashlink.secret, address: kashlink.address, value: kashlink.value, createdAt: Date.now() }
     // Persist the key before any NIM moves, so the link can always be reverted.
     saveLink(link)
     const fundingTx = unwrap(await provider.sendBasicTransactionWithData({
-      recipient: cashlink.address,
-      value: cashlink.value,
-      data: 'Cash Link',
+      recipient: kashlink.address,
+      value: kashlink.value,
+      data: 'KashLink',
     }))
     link = { ...link, fundingTx }
     saveLink(link)

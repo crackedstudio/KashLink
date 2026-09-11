@@ -5,7 +5,7 @@ defineProps<{ linkCount: number }>()
 const emit = defineEmits<{ next: [], showLinks: [] }>()
 
 const steps = [
-  { title: 'Deposit to the Cash Link', text: 'From your Nimiq Pay wallet' },
+  { title: 'Deposit to the KashLink', text: 'From your Nimiq Pay wallet' },
   { title: 'Share the link', text: 'Anyone with the link can claim the cash' },
   { title: 'Your friend receives the NIM', text: 'When they open it in Nimiq Pay' },
 ]
@@ -14,7 +14,7 @@ const steps = [
 <template>
   <main class="screen">
     <h1 class="title intro-title">
-      Send with Cash Link
+      Send with KashLink
     </h1>
     <p class="subtitle muted">
       Send NIM to anyone with a link, no address needed.
@@ -82,10 +82,10 @@ const steps = [
     <div class="spacer" />
 
     <button v-if="linkCount" class="link-btn links" @click="emit('showLinks')">
-      <Icon name="link" :size="18" /> Your Cash Links ({{ linkCount }})
+      <Icon name="link" :size="18" /> Your KashLinks ({{ linkCount }})
     </button>
     <button class="btn btn-primary" @click="emit('next')">
-      Create Cash Link
+      Create KashLink
     </button>
   </main>
 </template>

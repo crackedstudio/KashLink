@@ -1,7 +1,7 @@
 import { getAccounts, getHeadHeight, getNetworkId, getTransactions, IS_MAINNET, loadNimiq, sendTransaction } from './nimiq'
 
 /*
- * A Cash Link is a throwaway Nimiq address. The link's #fragment carries its private key
+ * A KashLink is a throwaway Nimiq address. The link's #fragment carries its private key
  * (fragments are never sent to a server), so whoever has the link can move the funds.
  *
  * The encoding is the same as the Nimiq Hub's cashlinks (hub/src/lib/Cashlink.ts):
@@ -12,7 +12,7 @@ import { getAccounts, getHeadHeight, getNetworkId, getTransactions, IS_MAINNET, 
 /** Recipient data the Hub attaches to claim transactions ('LINK' + 63 per char), so wallets label them. */
 const CLAIM_DATA = new Uint8Array([0, 139, 136, 141, 138])
 
-export interface ParsedCashlink {
+export interface ParsedKashlink {
   secret: string
   address: string
   /** Amount in luna the link was created with. */
@@ -32,7 +32,7 @@ function fromBase64Url(str: string): Uint8Array {
   return Uint8Array.from(atob(base64), c => c.charCodeAt(0))
 }
 
-export function encodeCashlink(privateKey: Uint8Array, value: number): string {
+export function encodeKashlink(privateKey: Uint8Array, value: number): string {
   const bytes = new Uint8Array(40)
   bytes.set(privateKey, 0)
   new DataView(bytes.buffer).setBigUint64(32, BigInt(value))
@@ -42,22 +42,22 @@ export function encodeCashlink(privateKey: Uint8Array, value: number): string {
 async function keyPairFromSecret(secret: string) {
   const Nimiq = await loadNimiq()
   const bytes = fromBase64Url(secret)
-  if (bytes.length < 40) throw new Error('Invalid Cash Link')
+  if (bytes.length < 40) throw new Error('Invalid KashLink')
   return { Nimiq, bytes, keyPair: Nimiq.KeyPair.derive(new Nimiq.PrivateKey(bytes.slice(0, 32))) }
 }
 
-export async function createCashlink(value: number): Promise<ParsedCashlink> {
+export async function createKashlink(value: number): Promise<ParsedKashlink> {
   const Nimiq = await loadNimiq()
   const keyPair = Nimiq.KeyPair.generate()
   return {
-    secret: encodeCashlink(keyPair.privateKey.serialize(), value),
+    secret: encodeKashlink(keyPair.privateKey.serialize(), value),
     address: keyPair.toAddress().toUserFriendlyAddress(),
     value,
     message: '',
   }
 }
 
-export async function parseCashlink(secret: string): Promise<ParsedCashlink | null> {
+export async function parseKashlink(secret: string): Promise<ParsedKashlink | null> {
   try {
     const { bytes, keyPair } = await keyPairFromSecret(secret)
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
@@ -71,11 +71,11 @@ export async function parseCashlink(secret: string): Promise<ParsedCashlink | nu
 }
 
 /**
- * Moves the whole balance of the Cash Link to `recipient`, signed with the link's own key.
+ * Moves the whole balance of the KashLink to `recipient`, signed with the link's own key.
  * Used both for claiming (recipient = claimer) and reverting (recipient = creator).
  * Returns the transaction hash.
  */
-export async function sweepCashlink(secret: string, recipient: string): Promise<string> {
+export async function sweepKashlink(secret: string, recipient: string): Promise<string> {
   const { Nimiq, keyPair } = await keyPairFromSecret(secret)
   const sender = keyPair.toAddress()
   const [[account, recipientAccount], height, networkId] = await Promise.all([
@@ -83,9 +83,9 @@ export async function sweepCashlink(secret: string, recipient: string): Promise<
     getHeadHeight(),
     getNetworkId(),
   ])
-  if (!account.balance) throw new Error('This Cash Link is empty. It was already claimed or reverted, or the deposit is not confirmed yet.')
+  if (!account.balance) throw new Error('This KashLink is empty. It was already claimed or reverted, or the deposit is not confirmed yet.')
   // Transfers into contracts (HTLC, vesting, staking) get included in a block but fail, and the funds stay put.
-  if (recipientAccount.type !== 'basic') throw new Error('This address can\'t receive a Cash Link.')
+  if (recipientAccount.type !== 'basic') throw new Error('This address can\'t receive a KashLink.')
 
   const tx = Nimiq.TransactionBuilder.newBasicWithData(
     sender,
@@ -101,7 +101,7 @@ export async function sweepCashlink(secret: string, recipient: string): Promise<
 }
 
 /** 'unclaimed' = has funds, 'claimed' = funds were moved out, 'waiting' = not funded (yet). */
-export async function getCashlinkStatus(address: string): Promise<{ status: 'unclaimed' | 'claimed' | 'waiting', balance: number }> {
+export async function getKashlinkStatus(address: string): Promise<{ status: 'unclaimed' | 'claimed' | 'waiting', balance: number }> {
   const [{ balance }] = await getAccounts([address])
   if (balance > 0) return { status: 'unclaimed', balance }
   const normalized = address.replace(/\s/g, '')

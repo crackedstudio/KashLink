@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { getCashlinkStatus, hubClaimUrl, nimiqPaySchemeUrl, nimiqPayUrl, type ParsedCashlink, parseCashlink, sweepCashlink } from '../lib/cashlink'
+import { getKashlinkStatus, hubClaimUrl, nimiqPaySchemeUrl, nimiqPayUrl, type ParsedKashlink, parseKashlink, sweepKashlink } from '../lib/kashlink'
 import { formatUsd, lunaToUsd, nimAmount } from '../lib/format'
 import { errorMessage, getPayoutAddress, getProvider } from '../lib/provider'
 import Icon from './Icon.vue'
@@ -10,20 +10,20 @@ const emit = defineEmits<{ done: [] }>()
 
 type State = 'loading' | 'invalid' | 'waiting' | 'unclaimed' | 'claiming' | 'claimed' | 'success'
 const state = ref<State>('loading')
-const cashlink = ref<ParsedCashlink | null>(null)
+const kashlink = ref<ParsedKashlink | null>(null)
 const balance = ref(0)
 const inNimiqPay = ref<boolean | null>(null)
 const error = ref<string | null>(null)
 let pollTimer: number | undefined
 
-const amount = computed(() => balance.value || cashlink.value?.value || 0)
+const amount = computed(() => balance.value || kashlink.value?.value || 0)
 const heading = computed(() => ({
-  loading: 'Opening Cash Link…',
-  invalid: 'This Cash Link is not valid',
-  waiting: 'This Cash Link is almost ready',
+  loading: 'Opening KashLink…',
+  invalid: 'This KashLink is not valid',
+  waiting: 'This KashLink is almost ready',
   unclaimed: 'You received cash!',
   claiming: 'You received cash!',
-  claimed: 'This Cash Link was already claimed',
+  claimed: 'This KashLink was already claimed',
   success: 'Cash received!',
 })[state.value])
 
@@ -65,9 +65,9 @@ function openInNimiqPay() {
 const isBusy = () => state.value === 'claiming' || state.value === 'success'
 
 async function refresh() {
-  if (!cashlink.value || isBusy()) return
+  if (!kashlink.value || isBusy()) return
   try {
-    const result = await getCashlinkStatus(cashlink.value.address)
+    const result = await getKashlinkStatus(kashlink.value.address)
     if (isBusy()) return
     balance.value = result.balance
     state.value = result.status
@@ -85,8 +85,8 @@ onMounted(async () => {
     openInNimiqPay()
   }
   getProvider().then(() => (inNimiqPay.value = true), () => (inNimiqPay.value = false))
-  cashlink.value = await parseCashlink(props.secret)
-  if (!cashlink.value) {
+  kashlink.value = await parseKashlink(props.secret)
+  if (!kashlink.value) {
     state.value = 'invalid'
     return
   }
@@ -104,7 +104,7 @@ async function claim() {
   state.value = 'claiming'
   try {
     const recipient = await getPayoutAddress()
-    await sweepCashlink(props.secret, recipient)
+    await sweepKashlink(props.secret, recipient)
     state.value = 'success'
   }
   catch (e) {
@@ -125,15 +125,15 @@ async function claim() {
       <p class="heading">
         {{ heading }}
       </p>
-      <template v-if="cashlink">
+      <template v-if="kashlink">
         <div class="amount">
           <span :class="amountClass">{{ nimAmount(amount) }}</span><span class="unit">NIM</span>
         </div>
         <p v-if="rate" class="fiat muted">
           ≈ {{ formatUsd(lunaToUsd(amount, rate)) }}
         </p>
-        <p v-if="cashlink.message" class="message">
-          “{{ cashlink.message }}”
+        <p v-if="kashlink.message" class="message">
+          “{{ kashlink.message }}”
         </p>
       </template>
       <p v-if="state === 'loading'" class="status muted">
@@ -174,7 +174,7 @@ async function claim() {
     </template>
 
     <button v-else-if="state !== 'loading' && state !== 'waiting'" class="btn btn-primary" @click="emit('done')">
-      {{ state === 'success' ? 'Done' : 'Send your own Cash Link' }}
+      {{ state === 'success' ? 'Done' : 'Send your own KashLink' }}
     </button>
   </main>
 </template>

@@ -32,7 +32,7 @@ const secondary = computed(() => (props.currency === 'USD' ? formatNim(props.lun
       <p class="to muted">
         Sending to
       </p>
-      <strong class="name">Cash Link</strong>
+      <strong class="name">KashLink</strong>
       <div class="primary">
         {{ primary }}
       </div>
