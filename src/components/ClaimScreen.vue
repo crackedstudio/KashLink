@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { getCashlinkStatus, hubClaimUrl, type ParsedCashlink, parseCashlink, sweepCashlink } from '../lib/cashlink'
+import { getCashlinkStatus, hubClaimUrl, nimiqPayUrl, type ParsedCashlink, parseCashlink, sweepCashlink } from '../lib/cashlink'
 import { formatUsd, lunaToUsd, nimAmount } from '../lib/format'
 import { errorMessage, getPayoutAddress, getProvider } from '../lib/provider'
 import Icon from './Icon.vue'
@@ -60,6 +60,9 @@ async function refresh() {
 }
 
 onMounted(async () => {
+  // Nimiq Pay injects window.nimiqPay before any script runs. Without it this is a regular browser:
+  // offer "Open in Nimiq Pay" right away instead of after the provider's 10 s timeout.
+  if (!window.nimiqPay) inNimiqPay.value = false
   getProvider().then(() => (inNimiqPay.value = true), () => (inNimiqPay.value = false))
   cashlink.value = await parseCashlink(props.secret)
   if (!cashlink.value) {
@@ -142,10 +145,10 @@ async function claim() {
         </template>
       </button>
       <template v-else>
+        <a class="btn btn-primary" :href="nimiqPayUrl(secret)">Open in Nimiq Pay</a>
         <p class="hint muted">
-          Open this link in <strong>Nimiq Pay</strong> (Mini Apps) to claim it, or use the Nimiq web wallet:
+          No Nimiq Pay? <a :href="hubClaimUrl(secret)">Claim with the Nimiq web wallet</a>
         </p>
-        <a class="btn btn-primary" :href="hubClaimUrl(secret)">Claim with Nimiq Wallet</a>
       </template>
     </template>
 
@@ -248,13 +251,14 @@ async function claim() {
 }
 
 .hint {
-  margin: 0 0 14px;
+  margin: 14px 0 0;
   font-size: 14px;
   text-align: center;
 }
 
-.hint strong {
+.hint a {
   color: var(--text);
+  font-weight: 700;
 }
 
 .error {

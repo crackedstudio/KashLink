@@ -40,6 +40,16 @@ const readyLink = ref<StoredLink | null>(null)
 const showLinks = ref(false)
 
 onMounted(() => {
+  // Tapping another Cash Link while KashLink is already open in Nimiq Pay only changes the #hash,
+  // without reloading the page, so switch to that link's claim screen here.
+  window.addEventListener('hashchange', () => {
+    const secret = secretFromHash()
+    if (!secret) return
+    claimSecret.value = secret
+    readyLink.value = null
+    showLinks.value = false
+    screen.value = 'claim'
+  })
   // Compile the key/transaction WASM now so creating a link is instant later.
   loadNimiq().catch(error => console.warn('Nimiq module failed to load', error))
   // Without an RPC server, balances come from the light client: start syncing it right away.
@@ -123,7 +133,7 @@ function finishClaim() {
 </script>
 
 <template>
-  <ClaimScreen v-if="screen === 'claim'" :secret="claimSecret" :rate @done="finishClaim" />
+  <ClaimScreen v-if="screen === 'claim'" :key="claimSecret" :secret="claimSecret" :rate @done="finishClaim" />
   <IntroScreen v-else-if="screen === 'intro'" :link-count="links.length" @next="startCreate" @show-links="showLinks = true" />
   <AmountScreen
     v-else-if="screen === 'amount'" :balance :balance-error :rate

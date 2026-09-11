@@ -116,6 +116,15 @@ export function linkUrl(secret: string): string {
   return `${base.replace(/#.*$/, '')}#${secret}`
 }
 
+/**
+ * Opens the link inside Nimiq Pay: nimpay.app is an app link for its whole domain, and Nimiq Pay keeps
+ * the #key when it loads the mini app (tested on iOS).
+ */
+export function nimiqPayUrl(secret: string): string {
+  const url = new URL(linkUrl(secret))
+  return `https://nimpay.app/miniapps/open/${url.host}${url.pathname}#${secret}`
+}
+
 /** Fallback for recipients outside Nimiq Pay: the Nimiq Hub understands the same link format. */
 export function hubClaimUrl(secret: string): string {
   return `${IS_MAINNET ? 'https://hub.nimiq.com' : 'https://hub.nimiq-testnet.com'}/cashlink/#${secret}`
