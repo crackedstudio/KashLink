@@ -84,14 +84,15 @@ function toggleCurrency() {
       </button>
     </p>
     <p v-else class="balance muted">
-      Balance: {{ balanceText }}
+      Available: <strong>{{ balanceText }}</strong>
     </p>
     <div class="display">
       <div class="amount">
         <span v-if="currency === 'USD'" class="unit">$</span>{{ input }}<span class="caret" /><span v-if="currency === 'NIM'" class="unit nim">NIM</span>
       </div>
       <button class="currency" :disabled="!rate" @click="toggleCurrency">
-        {{ currency }} <Icon v-if="rate" name="chevron" :size="18" />
+        <Icon v-if="currency === 'NIM'" name="hexagon" :size="14" class="gold" />
+        {{ currency }} <Icon v-if="rate" name="chevron" :size="16" />
       </button>
       <p class="secondary muted">
         {{ tooMuch ? '' : secondary }}
@@ -118,89 +119,115 @@ function toggleCurrency() {
 
 <style scoped>
 .balance {
-  margin: 6px 0 0;
-  font-size: 15px;
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.balance strong {
+  color: var(--text);
+  font-weight: 700;
 }
 
 .left {
   text-align: left;
 }
+
 .display {
   display: flex;
   flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
+  min-height: 150px;
 }
 
 .amount {
   display: flex;
   align-items: center;
-  font-size: 64px;
-  font-weight: 700;
+  max-width: 100%;
+  font-size: 56px;
+  font-weight: 800;
   line-height: 1.1;
+  letter-spacing: -0.02em;
   word-break: break-all;
 }
 
 .unit {
-  color: #c0c2d6;
+  color: var(--muted-2);
 }
 
 .unit.nim {
-  margin-left: 10px;
-  font-size: 32px;
+  margin-left: 8px;
+  font-size: 26px;
+  font-weight: 700;
 }
 
 .caret {
   width: 2px;
-  height: 64px;
-  margin-left: 4px;
-  background: var(--muted);
+  height: 52px;
+  margin-left: 3px;
+  border-radius: 1px;
+  background: var(--accent);
   animation: blink 1s steps(1) infinite;
 }
 
 .currency {
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-height: 44px;
-  margin-top: 16px;
+  gap: 5px;
+  height: 34px;
+  margin-top: 14px;
   padding: 0 14px;
   border: 0;
-  border-radius: 12px;
-  background: var(--surface-2);
-  font-size: 18px;
-  font-weight: 600;
+  border-radius: 500px;
+  background: var(--highlight);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  transition: background 0.2s var(--ease);
+}
+
+.currency:active:not(:disabled) {
+  background: var(--highlight-strong);
 }
 
 .currency:disabled {
   cursor: default;
 }
 
+.gold {
+  color: var(--nq-gold);
+}
+
 .secondary {
   min-height: 20px;
-  margin: 12px 0 0;
+  margin: 10px 0 0;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .keypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  margin-bottom: 16px;
+  gap: 4px;
+  margin-bottom: 12px;
 }
 
 .keypad button {
   display: grid;
   place-items: center;
-  height: 64px;
+  height: 56px;
   border: 0;
+  border-radius: var(--radius);
   background: none;
-  font-size: 26px;
-  font-weight: 600;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 700;
+  transition: background 0.15s var(--ease);
 }
 
 .keypad button:active {
-  opacity: 0.5;
+  background: var(--highlight);
 }
 
 @keyframes blink {

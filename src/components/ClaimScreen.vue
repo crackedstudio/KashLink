@@ -28,6 +28,22 @@ const heading = computed(() => ({
   success: 'Cash received!',
 })[state.value])
 
+const badgeIcon = computed(() => ({
+  loading: 'link',
+  invalid: 'alert',
+  waiting: 'link',
+  unclaimed: 'hexagon',
+  claiming: 'hexagon',
+  claimed: 'check',
+  success: 'check',
+} as const)[state.value])
+const badgeClass = computed(() => ({
+  gold: state.value === 'unclaimed' || state.value === 'claiming',
+  green: state.value === 'success',
+  gray: state.value === 'invalid' || state.value === 'claimed',
+}))
+const amountClass = computed(() => (state.value === 'claimed' || state.value === 'invalid' ? 'muted' : 'text'))
+
 // A claim in flight or done must not be overwritten by a status refresh.
 const isBusy = () => state.value === 'claiming' || state.value === 'success'
 
@@ -80,15 +96,18 @@ async function claim() {
 <template>
   <main class="screen claim">
     <div class="hero">
-      <span class="badge"><Icon name="dollar" :size="34" /></span>
+      <span class="badge" :class="badgeClass">
+        <span v-if="state === 'loading'" class="spinner" />
+        <Icon v-else :name="badgeIcon" :size="34" />
+      </span>
       <p class="heading">
         {{ heading }}
       </p>
       <template v-if="cashlink">
         <div class="amount">
-          <span class="accent">{{ nimAmount(amount) }}</span><span class="unit">NIM</span>
+          <span :class="amountClass">{{ nimAmount(amount) }}</span><span class="unit">NIM</span>
         </div>
-        <p v-if="rate" class="muted">
+        <p v-if="rate" class="fiat muted">
           ≈ {{ formatUsd(lunaToUsd(amount, rate)) }}
         </p>
         <p v-if="cashlink.message" class="message">
@@ -96,7 +115,7 @@ async function claim() {
         </p>
       </template>
       <p v-if="state === 'loading'" class="status muted">
-        <span class="spinner" /> Connecting to the Nimiq network…
+        Connecting to the Nimiq network…
       </p>
       <p v-else-if="state === 'waiting'" class="status muted">
         The deposit hasn't arrived yet. This page updates automatically.
@@ -143,56 +162,101 @@ async function claim() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 72px;
+  margin-top: 48px;
   text-align: center;
 }
 
 .badge {
   display: grid;
   place-items: center;
-  width: 72px;
-  height: 72px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--nq-light-blue);
+  background-image: var(--accent-bg);
+  color: #fff;
+  box-shadow: var(--shadow-btn);
+}
+
+.badge.gold {
+  background: var(--nq-gold);
+  background-image: var(--gold-bg);
+  box-shadow: 0 6px 16px rgba(233, 178, 19, 0.35);
+}
+
+.badge.green {
+  background: var(--nq-green);
+  background-image: var(--green-bg);
+  box-shadow: 0 6px 16px rgba(33, 188, 165, 0.35);
+}
+
+.badge.gray {
+  background: var(--highlight-strong);
+  background-image: none;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.badge .spinner {
+  width: 26px;
+  height: 26px;
 }
 
 .heading {
   margin: 20px 0 4px;
   font-size: 20px;
-  font-weight: 600;
-}
-
-.amount {
-  font-size: 52px;
   font-weight: 800;
 }
 
-.unit {
-  color: #c0c2d6;
+.amount {
+  margin-top: 8px;
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 
-.hero p {
-  margin-top: 6px;
+.text {
+  color: var(--text);
+}
+
+.unit {
+  margin-left: 8px;
+  color: var(--muted-2);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.fiat {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .message {
-  max-width: 320px;
+  max-width: 300px;
   margin-top: 16px;
-  font-size: 17px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--highlight);
+  font-size: 15px;
   font-style: italic;
 }
 
 .status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 320px;
-  margin-top: 24px;
+  max-width: 300px;
+  margin-top: 20px;
+  font-size: 14px;
 }
 
 .hint {
   margin: 0 0 14px;
+  font-size: 14px;
   text-align: center;
+}
+
+.hint strong {
+  color: var(--text);
 }
 
 .error {

@@ -43,8 +43,9 @@ onMounted(() => {
 
 <style scoped>
 h2 {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   font-size: 20px;
+  font-weight: 800;
 }
 
 ul {
@@ -58,12 +59,17 @@ li button {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  min-height: 64px;
-  padding: 10px 0;
+  min-height: 60px;
+  padding: 8px 0;
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--highlight);
   background: none;
+  color: var(--text);
   text-align: left;
+}
+
+li:last-child button {
+  border-bottom: 0;
 }
 
 li button > span:first-child {
@@ -72,16 +78,26 @@ li button > span:first-child {
   gap: 2px;
 }
 
+li button strong {
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .muted {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .status {
+  padding: 4px 10px;
+  border-radius: 500px;
+  background: var(--highlight);
   color: var(--muted);
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .status.open {
-  color: var(--accent);
+  background: rgba(33, 188, 165, 0.12);
+  color: var(--nq-green);
 }
 </style>

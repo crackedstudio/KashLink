@@ -24,33 +24,43 @@ const secondary = computed(() => (props.currency === 'USD' ? formatNim(props.lun
       <Icon name="back" />
     </button>
     <h1 class="title">
-      Send to
+      Review
     </h1>
 
-    <div class="recipient">
-      <span class="badge"><Icon name="dollar" :size="26" /></span>
-      <strong>Cash Link</strong>
-    </div>
-
     <div class="summary">
+      <span class="badge"><Icon name="link" :size="30" /></span>
+      <p class="to muted">
+        Sending to
+      </p>
+      <strong class="name">Cash Link</strong>
       <div class="primary">
         {{ primary }}
       </div>
-      <p v-if="secondary" class="muted">
+      <p v-if="secondary" class="muted secondary">
         {{ secondary }}
       </p>
     </div>
 
-    <p v-if="showHelp" class="help muted">
-      Nimiq transactions are free, so the total is exactly what your friend receives.
-    </p>
-    <div class="total">
-      <span>Total amount
-        <button class="help-btn accent" aria-label="What is the total?" @click="showHelp = !showHelp">
-          <Icon name="help" :size="22" />
-        </button>
-      </span>
-      <strong>{{ formatNim(luna) }}</strong>
+    <div class="card details">
+      <div class="row">
+        <span class="muted">Amount</span>
+        <strong>{{ formatNim(luna) }}</strong>
+      </div>
+      <div class="row">
+        <span class="muted">Network fee</span>
+        <strong class="green">Free</strong>
+      </div>
+      <div class="row total">
+        <span>Total
+          <button class="help-btn" aria-label="What is the total?" @click="showHelp = !showHelp">
+            <Icon name="help" :size="18" />
+          </button>
+        </span>
+        <strong>{{ formatNim(luna) }}</strong>
+      </div>
+      <p v-if="showHelp" class="help muted">
+        Nimiq transactions are free, so the total is exactly what your friend receives.
+      </p>
     </div>
 
     <p v-if="error" class="error">
@@ -61,73 +71,103 @@ const secondary = computed(() => (props.currency === 'USD' ? formatNim(props.lun
         <span class="spinner" /> Confirm in Nimiq Pay…
       </template>
       <template v-else>
-        Send
+        Send {{ formatNim(luna) }}
       </template>
     </button>
   </main>
 </template>
 
 <style scoped>
-.recipient {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  margin-top: 28px;
-  font-size: 17px;
-}
-
-.badge {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
 .summary {
   display: flex;
   flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 16px 0;
   text-align: center;
 }
 
-.primary {
-  font-size: 52px;
+.badge {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--nq-light-blue);
+  background-image: var(--accent-bg);
+  color: #fff;
+  box-shadow: var(--shadow-btn);
+}
+
+.to {
+  margin-top: 14px;
+  font-size: 13px;
+}
+
+.name {
+  font-size: 17px;
   font-weight: 700;
 }
 
-.summary p {
-  margin: 6px 0 0;
+.primary {
+  margin-top: 18px;
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 
-.help {
-  margin: 0 0 12px;
-  font-size: 14px;
+.secondary {
+  margin-top: 6px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
-.total {
+.details {
+  margin-bottom: 14px;
+  padding: 4px 16px;
+}
+
+.row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
-  font-size: 16px;
+  min-height: 44px;
+  font-size: 15px;
 }
 
-.total span {
+.row + .row {
+  border-top: 1px solid var(--highlight);
+}
+
+.row strong {
+  font-weight: 700;
+}
+
+.total {
+  font-weight: 700;
+}
+
+.total > span {
   display: flex;
   align-items: center;
+  gap: 2px;
 }
 
 .help-btn {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   border: 0;
   background: none;
+  color: var(--muted-2);
+}
+
+.help {
+  padding: 0 0 12px;
+  font-size: 13px;
 }
 
 .error {
