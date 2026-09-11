@@ -1,5 +1,5 @@
 import { type ErrorResponse, init, type NimiqProvider } from '@nimiq/mini-app-sdk'
-import { getReadyClient } from './nimiq'
+import { getAccounts } from './nimiq'
 
 let providerPromise: Promise<NimiqProvider> | null = null
 let userAddressesPromise: Promise<string[]> | null = null
@@ -51,7 +51,7 @@ export function getUserAddresses(): Promise<string[]> {
  */
 export async function getPayoutAddress(): Promise<string> {
   const addresses = await getUserAddresses()
-  const accounts = await (await getReadyClient()).getAccounts(addresses)
+  const accounts = await getAccounts(addresses)
   const index = accounts.findIndex(account => account.type === 'basic')
   if (index === -1) throw new Error('Your wallet has no regular Nimiq address to receive NIM.')
   return addresses[index]

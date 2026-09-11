@@ -9,9 +9,9 @@ import ReviewScreen from './components/ReviewScreen.vue'
 import { createCashlink } from './lib/cashlink'
 import { getNimUsdRate } from './lib/fiat'
 import type { Currency } from './lib/format'
-import { getClient, getTotalBalance } from './lib/nimiq'
+import { getClient, getTotalBalance, loadNimiq, USES_RPC } from './lib/nimiq'
 import { errorMessage, getProvider, getUserAddresses, isUserRejection, unwrap } from './lib/provider'
-import { loadLinks, removeLink, saveLink, type StoredLink } from './lib/storage'
+import { loadCachedBalance, loadLinks, removeLink, saveCachedBalance, saveLink, type StoredLink } from './lib/storage'
 
 type Screen = 'intro' | 'amount' | 'review' | 'claim'
 
@@ -40,18 +40,23 @@ const readyLink = ref<StoredLink | null>(null)
 const showLinks = ref(false)
 
 onMounted(() => {
-  // Start syncing the light client right away so balances and claims are quick later.
-  getClient().catch(error => console.warn('Nimiq client failed to start', error))
+  // Compile the key/transaction WASM now so creating a link is instant later.
+  loadNimiq().catch(error => console.warn('Nimiq module failed to load', error))
+  // Without an RPC server, balances come from the light client: start syncing it right away.
+  if (!USES_RPC) getClient().catch(error => console.warn('Nimiq client failed to start', error))
   getNimUsdRate().then(value => (rate.value = value))
 })
 
 async function loadBalance() {
-  balance.value = null
   balanceError.value = null
+  // Show the last known balance instantly; the fresh one replaces it a moment later.
+  balance.value = loadCachedBalance()
   try {
     balance.value = await getTotalBalance(await getUserAddresses())
+    saveCachedBalance(balance.value)
   }
   catch (error) {
+    balance.value = null
     balanceError.value = errorMessage(error)
   }
 }

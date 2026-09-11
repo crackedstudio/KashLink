@@ -1,4 +1,4 @@
-import { getReadyClient, IS_MAINNET, loadNimiq } from './nimiq'
+import { getAccounts, getHeadHeight, getNetworkId, getTransactions, IS_MAINNET, loadNimiq, sendTransaction } from './nimiq'
 
 /*
  * A Cash Link is a throwaway Nimiq address. The link's #fragment carries its private key
@@ -76,42 +76,38 @@ export async function parseCashlink(secret: string): Promise<ParsedCashlink | nu
  * Returns the transaction hash.
  */
 export async function sweepCashlink(secret: string, recipient: string): Promise<string> {
-  const [{ Nimiq, keyPair }, client] = await Promise.all([keyPairFromSecret(secret), getReadyClient()])
+  const { Nimiq, keyPair } = await keyPairFromSecret(secret)
   const sender = keyPair.toAddress()
-  const account = await client.getAccount(sender)
-  const balance = (account as { balance?: number }).balance ?? 0
-  if (!balance) throw new Error('This Cash Link is empty. It was already claimed or reverted, or the deposit is not confirmed yet.')
+  const [[account, recipientAccount], height, networkId] = await Promise.all([
+    getAccounts([sender.toUserFriendlyAddress(), recipient]),
+    getHeadHeight(),
+    getNetworkId(),
+  ])
+  if (!account.balance) throw new Error('This Cash Link is empty. It was already claimed or reverted, or the deposit is not confirmed yet.')
   // Transfers into contracts (HTLC, vesting, staking) get included in a block but fail, and the funds stay put.
-  if ((await client.getAccount(recipient)).type !== 'basic') throw new Error('This address can\'t receive a Cash Link.')
+  if (recipientAccount.type !== 'basic') throw new Error('This address can\'t receive a Cash Link.')
 
-  const [height, networkId] = await Promise.all([client.getHeadHeight(), client.getNetworkId()])
   const tx = Nimiq.TransactionBuilder.newBasicWithData(
     sender,
     Nimiq.Address.fromUserFriendlyAddress(recipient),
     CLAIM_DATA,
-    BigInt(balance),
+    BigInt(account.balance),
     0n,
     height,
     networkId,
   )
   keyPair.signTransaction(tx)
-
-  const details = await client.sendTransaction(tx)
-  if (details.executionResult === false || details.state === 'invalidated' || details.state === 'expired') {
-    throw new Error('The network rejected the transaction. Please try again.')
-  }
-  return details.transactionHash
+  return sendTransaction(tx)
 }
 
 /** 'unclaimed' = has funds, 'claimed' = funds were moved out, 'waiting' = not funded (yet). */
 export async function getCashlinkStatus(address: string): Promise<{ status: 'unclaimed' | 'claimed' | 'waiting', balance: number }> {
-  const client = await getReadyClient()
-  const account = await client.getAccount(address)
-  const balance = (account as { balance?: number }).balance ?? 0
+  const [{ balance }] = await getAccounts([address])
   if (balance > 0) return { status: 'unclaimed', balance }
-  const txs = await client.getTransactionsByAddress(address, null, null, null, 10)
   const normalized = address.replace(/\s/g, '')
-  const movedOut = txs.some(tx => tx.sender.replace(/\s/g, '') === normalized && tx.executionResult !== false)
+  const movedOut = (await getTransactions(address)).some(
+    tx => tx.sender.replace(/\s/g, '') === normalized && tx.executionResult !== false,
+  )
   return { status: movedOut ? 'claimed' : 'waiting', balance }
 }
 

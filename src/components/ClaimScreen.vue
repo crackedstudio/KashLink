@@ -2,7 +2,6 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getCashlinkStatus, hubClaimUrl, type ParsedCashlink, parseCashlink, sweepCashlink } from '../lib/cashlink'
 import { formatUsd, lunaToUsd, nimAmount } from '../lib/format'
-import { getReadyClient } from '../lib/nimiq'
 import { errorMessage, getPayoutAddress, getProvider } from '../lib/provider'
 import Icon from './Icon.vue'
 
@@ -15,7 +14,7 @@ const cashlink = ref<ParsedCashlink | null>(null)
 const balance = ref(0)
 const inNimiqPay = ref<boolean | null>(null)
 const error = ref<string | null>(null)
-let listenerHandle: number | null = null
+let pollTimer: number | undefined
 
 const amount = computed(() => balance.value || cashlink.value?.value || 0)
 const heading = computed(() => ({
@@ -68,14 +67,13 @@ onMounted(async () => {
     return
   }
   await refresh()
-  // Update live when the deposit lands or someone else claims it.
-  const client = await getReadyClient()
-  listenerHandle = await client.addTransactionListener(() => refresh(), [cashlink.value.address])
+  // Keep the status current: the deposit may still be landing, or someone else may claim it first.
+  pollTimer = window.setInterval(() => {
+    if (state.value === 'waiting' || state.value === 'unclaimed') refresh()
+  }, 5000)
 })
 
-onUnmounted(async () => {
-  if (listenerHandle !== null) (await getReadyClient()).removeListener(listenerHandle)
-})
+onUnmounted(() => clearInterval(pollTimer))
 
 async function claim() {
   error.value = null
