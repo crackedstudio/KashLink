@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Icon from './Icon.vue'
+import Logo from './Logo.vue'
 
 defineProps<{ linkCount: number }>()
 const emit = defineEmits<{ next: [], showLinks: [] }>()
@@ -13,6 +14,10 @@ const steps = [
 
 <template>
   <main class="screen">
+    <div class="brand">
+      <Logo :size="28" />
+      <span>KashLink</span>
+    </div>
     <h1 class="title intro-title">
       Send with KashLink
     </h1>
@@ -49,11 +54,14 @@ const steps = [
       <rect x="58" y="126" width="42" height="14" rx="7" fill="url(#hero-bg)" />
       <!-- link dashes -->
       <path d="M118 94 H 215" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 10" opacity=".85" />
-      <!-- NIM coin travelling -->
+      <!-- KashLink mark travelling -->
       <g transform="translate(167 94)">
         <circle r="30" fill="#fff" opacity=".15" />
-        <path d="M0-23l19.9 11.5v23L0 23l-19.9-11.5v-23z" fill="url(#hero-gold)" />
-        <path d="M0-14l12.1 7v14L0 14l-12.1-7v-14z" fill="none" stroke="#fff" stroke-width="3" opacity=".9" />
+        <g transform="translate(-24 -24) scale(.48)">
+          <path d="M50 3l41 23.5v47L50 97 9 73.5v-47z" fill="url(#hero-gold)" />
+          <path d="M50 19l27 15.5v31L50 81 23 65.5v-31z" fill="none" stroke="#fff" stroke-width="6" stroke-linejoin="round" />
+          <path d="M41 35v30M60 35L44 51.5M47 48.5L61 65" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" />
+        </g>
       </g>
       <!-- receiver phone -->
       <rect x="221" y="34" width="70" height="120" rx="12" fill="#fff" opacity=".18" />
@@ -91,8 +99,18 @@ const steps = [
 </template>
 
 <style scoped>
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
 .intro-title {
-  margin-top: 24px;
+  margin-top: 20px;
 }
 
 .subtitle {

@@ -4,6 +4,7 @@ import { getKashlinkStatus, hubClaimUrl, nimiqPaySchemeUrl, nimiqPayUrl, type Pa
 import { formatUsd, lunaToUsd, nimAmount } from '../lib/format'
 import { errorMessage, getPayoutAddress, getProvider } from '../lib/provider'
 import Icon from './Icon.vue'
+import Logo from './Logo.vue'
 
 const props = defineProps<{ secret: string, rate: number | null }>()
 const emit = defineEmits<{ done: [] }>()
@@ -31,8 +32,8 @@ const badgeIcon = computed(() => ({
   loading: 'link',
   invalid: 'alert',
   waiting: 'link',
-  unclaimed: 'hexagon',
-  claiming: 'hexagon',
+  unclaimed: 'logo',
+  claiming: 'logo',
   claimed: 'check',
   success: 'check',
 } as const)[state.value])
@@ -120,6 +121,7 @@ async function claim() {
     <div class="hero">
       <span class="badge" :class="badgeClass">
         <span v-if="state === 'loading'" class="spinner" />
+        <Logo v-else-if="badgeIcon === 'logo'" :size="52" />
         <Icon v-else :name="badgeIcon" :size="34" />
       </span>
       <p class="heading">
