@@ -21,6 +21,25 @@ Whoever opens the link inside Nimiq Pay taps **Claim cash** and the NIM moves to
 Links use the same encoding as the Nimiq Hub, so someone without Nimiq Pay can also claim at
 `hub.nimiq.com/cashlink/#…` (the claim screen offers this automatically in a normal browser).
 
+## How shared links open
+
+Shared links look like `https://nimpay.app/miniapps/open/<your-host>/#<key>`. `nimpay.app` is a Universal
+Link (iOS) / App Link (Android) domain for Nimiq Pay, so on a phone with the app installed, tapping the link
+in WhatsApp, Messages, etc. opens Nimiq Pay **directly**, which loads KashLink on the claim screen. No browser
+step, no "Open in Nimiq Pay" tap.
+
+Without the app, the tap lands on nimpay.app, which shows an install page — but only for mini apps that are
+listed in the Nimiq Pay directory. Until KashLink is listed, that page is a 404, so:
+
+1. Submit KashLink to the directory: add it to `src/data/nimiq-mini-apps.json` in
+   [nimiq/awesome](https://github.com/nimiq/awesome) (see its CONTRIBUTING.md). The listing is matched by
+   host, so use the same host as `VITE_PUBLIC_URL`.
+2. Until that PR is merged, build with `VITE_DIRECT_LINKS=false` to share the plain app URL instead. Those
+   links open in the browser first and show an "Open in Nimiq Pay" button (plus the Hub fallback).
+
+Links that were already shared keep working either way: the raw app URL still shows the claim screen, and
+`#<key>` is never sent to a server in either form.
+
 ## Develop
 
 ```bash

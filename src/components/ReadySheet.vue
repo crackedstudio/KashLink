@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { getCashlinkStatus, linkUrl, sweepCashlink } from '../lib/cashlink'
+import { getCashlinkStatus, shareUrl, sweepCashlink } from '../lib/cashlink'
 import { formatDate, formatNim, formatUsd, lunaToUsd, nimAmount } from '../lib/format'
 import { errorMessage, getPayoutAddress } from '../lib/provider'
 import type { StoredLink } from '../lib/storage'
@@ -9,7 +9,7 @@ import Icon from './Icon.vue'
 const props = defineProps<{ link: StoredLink, rate: number | null }>()
 const emit = defineEmits<{ close: [] }>()
 
-const url = computed(() => linkUrl(props.link.secret))
+const url = computed(() => shareUrl(props.link.secret))
 const shareText = computed(() => `I sent you ${formatNim(props.link.value)} with a Nimiq Cash Link. Open it in Nimiq Pay to claim:`)
 const whatsappUrl = computed(() => `https://wa.me/?text=${encodeURIComponent(`${shareText.value} ${url.value}`)}`)
 

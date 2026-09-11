@@ -111,18 +111,32 @@ export async function getCashlinkStatus(address: string): Promise<{ status: 'unc
   return { status: movedOut ? 'claimed' : 'waiting', balance }
 }
 
+/** The mini app's own URL for this link (what Nimiq Pay loads). */
 export function linkUrl(secret: string): string {
   const base = import.meta.env.VITE_PUBLIC_URL || `${location.origin}${location.pathname}`
   return `${base.replace(/#.*$/, '')}#${secret}`
 }
 
 /**
- * Opens the link inside Nimiq Pay: nimpay.app is an app link for its whole domain, and Nimiq Pay keeps
- * the #key when it loads the mini app (tested on iOS).
+ * The same link wrapped as a nimpay.app "open" URL. nimpay.app is registered as a Universal Link (iOS) and
+ * App Link (Android) domain for Nimiq Pay, so on a phone with the app installed the OS hands the tap straight
+ * to Nimiq Pay, which loads the mini app with the #key intact (tested on iOS) — no browser in between.
+ * Without the app, nimpay.app shows an install page, but only for mini apps listed in the Nimiq Pay directory
+ * (github.com/nimiq/awesome); unlisted hosts get a 404 there.
  */
 export function nimiqPayUrl(secret: string): string {
   const url = new URL(linkUrl(secret))
-  return `https://nimpay.app/miniapps/open/${url.host}${url.pathname}#${secret}`
+  const path = url.pathname === '/' ? '' : url.pathname
+  return `https://nimpay.app/miniapps/open/${url.host}${path}#${secret}`
+}
+
+/**
+ * The link that gets shared. Defaults to the nimpay.app link so it opens directly in Nimiq Pay; set
+ * VITE_DIRECT_LINKS=false to share the plain mini app URL instead (until KashLink is in the directory,
+ * that keeps a working claim page for recipients without Nimiq Pay).
+ */
+export function shareUrl(secret: string): string {
+  return import.meta.env.VITE_DIRECT_LINKS === 'false' ? linkUrl(secret) : nimiqPayUrl(secret)
 }
 
 /** Fallback for recipients outside Nimiq Pay: the Nimiq Hub understands the same link format. */
