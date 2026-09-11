@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { getCashlinkStatus, hubClaimUrl, nimiqPayUrl, type ParsedCashlink, parseCashlink, sweepCashlink } from '../lib/cashlink'
+import { getCashlinkStatus, hubClaimUrl, nimiqPaySchemeUrl, nimiqPayUrl, type ParsedCashlink, parseCashlink, sweepCashlink } from '../lib/cashlink'
 import { formatUsd, lunaToUsd, nimAmount } from '../lib/format'
 import { errorMessage, getPayoutAddress, getProvider } from '../lib/provider'
 import Icon from './Icon.vue'
@@ -43,6 +43,24 @@ const badgeClass = computed(() => ({
 }))
 const amountClass = computed(() => (state.value === 'claimed' || state.value === 'invalid' ? 'muted' : 'text'))
 
+/**
+ * Hand the link straight to Nimiq Pay, so a recipient lands on the claim screen instead of this page.
+ * Only on phones, and only once per link per tab: if the app isn't installed the redirect does nothing
+ * (or shows a short browser warning) and this page stays visible with its buttons.
+ */
+function openInNimiqPay() {
+  if (!/iphone|ipad|ipod|android/i.test(navigator.userAgent)) return
+  try {
+    const key = `kashlink-opened:${props.secret}`
+    if (sessionStorage.getItem(key)) return
+    sessionStorage.setItem(key, '1')
+  }
+  catch {
+    return // private mode: don't risk a redirect loop
+  }
+  location.href = nimiqPaySchemeUrl(props.secret)
+}
+
 // A claim in flight or done must not be overwritten by a status refresh.
 const isBusy = () => state.value === 'claiming' || state.value === 'success'
 
@@ -62,7 +80,10 @@ async function refresh() {
 onMounted(async () => {
   // Nimiq Pay injects window.nimiqPay before any script runs. Without it this is a regular browser:
   // offer "Open in Nimiq Pay" right away instead of after the provider's 10 s timeout.
-  if (!window.nimiqPay) inNimiqPay.value = false
+  if (!window.nimiqPay) {
+    inNimiqPay.value = false
+    openInNimiqPay()
+  }
   getProvider().then(() => (inNimiqPay.value = true), () => (inNimiqPay.value = false))
   cashlink.value = await parseCashlink(props.secret)
   if (!cashlink.value) {

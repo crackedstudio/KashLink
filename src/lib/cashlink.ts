@@ -139,6 +139,14 @@ export function shareUrl(secret: string): string {
   return import.meta.env.VITE_DIRECT_LINKS === 'false' ? linkUrl(secret) : nimiqPayUrl(secret)
 }
 
+/**
+ * Custom scheme for the same link. Apple and Google only hand an https link to the app on a real tap,
+ * so this is the form that also works for an automatic redirect.
+ */
+export function nimiqPaySchemeUrl(secret: string): string {
+  return `nimiqpay://miniapp?url=${encodeURIComponent(linkUrl(secret))}`
+}
+
 /** Fallback for recipients outside Nimiq Pay: the Nimiq Hub understands the same link format. */
 export function hubClaimUrl(secret: string): string {
   return `${IS_MAINNET ? 'https://hub.nimiq.com' : 'https://hub.nimiq-testnet.com'}/cashlink/#${secret}`
