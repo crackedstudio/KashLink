@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { formatDate, formatNim } from '../lib/format'
+import { formatUsdt } from '../lib/usdt'
 import { EXPIRY_DAYS, isExpired, refreshStatuses, revertLinks, statuses } from '../lib/links'
 import { errorMessage } from '../lib/provider'
 import type { StoredLink } from '../lib/storage'
@@ -10,6 +11,16 @@ const props = defineProps<{ links: StoredLink[] }>()
 const emit = defineEmits<{ open: [link: StoredLink], close: [], changed: [] }>()
 
 const labels = { pending: 'Pending', unclaimed: 'Unclaimed', claimed: 'Claimed', reverted: 'Returned' } as const
+
+/** NIM and USDT cannot be added together, so totals are listed per token. */
+function amountOf(link: StoredLink): string {
+  return link.token === 'usdt' ? `${formatUsdt(BigInt(link.value))} USDT` : formatNim(link.value)
+}
+function totalOf(list: StoredLink[]): string {
+  const nim = list.filter(l => l.token !== 'usdt').reduce((sum, l) => sum + l.value, 0)
+  const usdt = list.filter(l => l.token === 'usdt').reduce((sum, l) => sum + BigInt(l.value), 0n)
+  return [nim ? formatNim(nim) : '', usdt ? `${formatUsdt(usdt)} USDT` : ''].filter(Boolean).join(' + ')
+}
 
 const loading = ref(true)
 const reverting = ref<string | null>(null)
@@ -23,17 +34,17 @@ onMounted(async () => {
 
 const claimed = computed(() => props.links.filter(l => statuses[l.address] === 'claimed').length)
 const outstanding = computed(() => props.links.filter(l => statuses[l.address] === 'unclaimed'))
-const outstandingLuna = computed(() => outstanding.value.reduce((sum, l) => sum + l.value, 0))
+const outstandingTotal = computed(() => totalOf(outstanding.value))
 const expired = computed(() => props.links.filter(isExpired))
-const expiredLuna = computed(() => expired.value.reduce((sum, l) => sum + l.value, 0))
+const expiredTotal = computed(() => totalOf(expired.value))
 
 async function revert(links: StoredLink[], key: string) {
   reverting.value = key
   error.value = null
   notice.value = null
   try {
-    const { reverted, failed, luna } = await revertLinks(links)
-    if (reverted) notice.value = `Returned ${formatNim(luna)} to your wallet.`
+    const { reverted, failed, links: returned } = await revertLinks(links)
+    if (reverted) notice.value = `Returned ${totalOf(returned)} to your wallet.`
     if (failed) error.value = `${failed} link${failed > 1 ? 's' : ''} could not be returned. Try again in a moment.`
     emit('changed')
   }
@@ -57,21 +68,21 @@ async function revert(links: StoredLink[], key: string) {
         </template>
         <template v-else>
           {{ claimed }} of {{ links.length }} claimed
-          <template v-if="outstandingLuna"> · <strong>{{ formatNim(outstandingLuna) }}</strong> still out there</template>
+          <template v-if="outstandingTotal"> · <strong>{{ outstandingTotal }}</strong> still out there</template>
         </template>
       </p>
 
       <div v-if="expired.length" class="expired">
         <div>
           <strong>{{ expired.length }} link{{ expired.length > 1 ? 's' : '' }} unclaimed after {{ EXPIRY_DAYS }} days</strong>
-          <span class="muted">Nobody opened them. You can take the NIM back.</span>
+          <span class="muted">Nobody opened them. You can take the money back.</span>
         </div>
         <button class="btn btn-primary small" :disabled="!!reverting" @click="revert(expired, 'all')">
           <template v-if="reverting === 'all'">
             <span class="spinner" /> Returning…
           </template>
           <template v-else>
-            Return {{ formatNim(expiredLuna) }}
+            Return {{ expiredTotal }}
           </template>
         </button>
       </div>
@@ -87,7 +98,7 @@ async function revert(links: StoredLink[], key: string) {
         <li v-for="link in links" :key="link.address">
           <button class="row" @click="emit('open', link)">
             <span class="info">
-              <strong>{{ formatNim(link.value) }}</strong>
+              <strong>{{ amountOf(link) }}</strong>
               <span class="muted">{{ formatDate(link.createdAt) }}</span>
             </span>
             <span class="status" :class="statuses[link.address]">

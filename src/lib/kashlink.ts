@@ -1,4 +1,5 @@
 import { getAccounts, getHeadHeight, getNetworkId, getTransactions, loadNimiq, sendTransaction } from './nimiq'
+import type { Token } from './storage'
 
 /*
  * A KashLink is a throwaway Nimiq address. The link's #fragment carries its private key
@@ -111,10 +112,15 @@ export async function getKashlinkStatus(address: string): Promise<{ status: 'unc
   return { status: movedOut ? 'claimed' : 'waiting', balance }
 }
 
-/** The mini app's own URL for this link (what Nimiq Pay loads). */
-export function linkUrl(secret: string): string {
+/**
+ * The mini app's own URL for this link. USDT links live under /u so the claim screen knows which
+ * chain to talk to before it touches the secret; the key itself stays in the fragment, which is
+ * never sent to any server.
+ */
+export function linkUrl(secret: string, token: Token = 'nim'): string {
   const base = import.meta.env.VITE_PUBLIC_URL || `${location.origin}${location.pathname}`
-  return `${base.replace(/#.*$/, '')}#${secret}`
+  const root = base.replace(/#.*$/, '').replace(/u\/?$/, '').replace(/\/?$/, '/')
+  return `${root}${token === 'usdt' ? 'u' : ''}#${secret}`
 }
 
 /**
@@ -124,8 +130,8 @@ export function linkUrl(secret: string): string {
  * Without the app, nimpay.app shows an install page, but only for mini apps listed in the Nimiq Pay directory
  * (github.com/nimiq/awesome); unlisted hosts get a 404 there.
  */
-export function nimiqPayUrl(secret: string): string {
-  const url = new URL(linkUrl(secret))
+export function nimiqPayUrl(secret: string, token: Token = 'nim'): string {
+  const url = new URL(linkUrl(secret, token))
   const path = url.pathname === '/' ? '' : url.pathname
   return `https://nimpay.app/miniapps/open/${url.host}${path}#${secret}`
 }
@@ -135,15 +141,15 @@ export function nimiqPayUrl(secret: string): string {
  * VITE_DIRECT_LINKS=false to share the plain mini app URL instead (until KashLink is in the directory,
  * that keeps a working claim page for recipients without Nimiq Pay).
  */
-export function shareUrl(secret: string): string {
-  return import.meta.env.VITE_DIRECT_LINKS === 'false' ? linkUrl(secret) : nimiqPayUrl(secret)
+export function shareUrl(secret: string, token: Token = 'nim'): string {
+  return import.meta.env.VITE_DIRECT_LINKS === 'false' ? linkUrl(secret, token) : nimiqPayUrl(secret, token)
 }
 
 /**
  * Custom scheme for the same link. Apple and Google only hand an https link to the app on a real tap,
  * so this is the form that also works for an automatic redirect.
  */
-export function nimiqPaySchemeUrl(secret: string): string {
-  return `nimiqpay://miniapp?url=${encodeURIComponent(linkUrl(secret))}`
+export function nimiqPaySchemeUrl(secret: string, token: Token = 'nim'): string {
+  return `nimiqpay://miniapp?url=${encodeURIComponent(linkUrl(secret, token))}`
 }
 

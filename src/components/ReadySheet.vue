@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { shareUrl } from '../lib/kashlink'
-import { formatDate, formatNim, formatUsd, lunaToUsd, nimAmount } from '../lib/format'
+import { formatUsdt } from '../lib/usdt'
+import { formatDate, formatUsd, lunaToUsd, nimAmount } from '../lib/format'
 import { refreshStatuses, revertLinks, statuses } from '../lib/links'
 import { errorMessage } from '../lib/provider'
 import type { StoredLink } from '../lib/storage'
@@ -10,8 +11,11 @@ import Icon from './Icon.vue'
 const props = defineProps<{ link: StoredLink, rate: number | null }>()
 const emit = defineEmits<{ close: [] }>()
 
-const url = computed(() => shareUrl(props.link.secret))
-const shareText = computed(() => `I sent you ${formatNim(props.link.value)} with a Nimiq KashLink. Open it in Nimiq Pay to claim:`)
+const isUsdt = computed(() => props.link.token === 'usdt')
+const url = computed(() => shareUrl(props.link.secret, props.link.token ?? 'nim'))
+const amountText = computed(() => (isUsdt.value ? formatUsdt(BigInt(props.link.value)) : nimAmount(props.link.value)))
+const unitText = computed(() => (isUsdt.value ? 'USDT' : 'NIM'))
+const shareText = computed(() => `I sent you ${amountText.value} ${unitText.value} with a KashLink. Open it in Nimiq Pay to claim:`)
 const whatsappUrl = computed(() => `https://wa.me/?text=${encodeURIComponent(`${shareText.value} ${url.value}`)}`)
 
 const copied = ref(false)
@@ -68,7 +72,7 @@ async function revert() {
   try {
     const { reverted: count } = await revertLinks([props.link])
     if (count) reverted.value = true
-    else error.value = 'Could not return the NIM. Try again in a moment.'
+    else error.value = `Could not return the ${unitText.value}. Try again in a moment.`
   }
   catch (e) {
     error.value = errorMessage(e)
@@ -92,9 +96,9 @@ async function revert() {
         {{ reverted ? 'KashLink reverted' : claimed ? 'KashLink claimed' : 'Your KashLink is ready!' }}
       </p>
       <div class="amount">
-        <span>{{ nimAmount(link.value) }}</span><span class="unit">NIM</span>
+        <span>{{ amountText }}</span><span class="unit">{{ unitText }}</span>
       </div>
-      <p v-if="rate" class="fiat muted">
+      <p v-if="rate && !isUsdt" class="fiat muted">
         ≈ {{ formatUsd(lunaToUsd(link.value, rate)) }}
       </p>
       <p class="date muted">
@@ -137,7 +141,7 @@ async function revert() {
 
       <template v-else>
         <p class="warning muted center">
-          {{ reverted ? 'The NIM is on its way back to your wallet.' : 'The NIM was already taken out of this link.' }} This link no longer works.
+          {{ reverted ? `The ${unitText} is on its way back to your wallet.` : `The ${unitText} was already taken out of this link.` }} This link no longer works.
         </p>
         <button class="btn btn-primary" @click="emit('close')">
           Done
