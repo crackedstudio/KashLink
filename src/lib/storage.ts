@@ -1,8 +1,12 @@
+export type Token = 'nim' | 'usdt'
+
 export interface StoredLink {
   secret: string
   address: string
-  /** Luna. */
+  /** Luna for NIM, smallest units (6 decimals) for USDT. */
   value: number
+  /** Absent on links made before USDT existed, which were all NIM. */
+  token?: Token
   createdAt: number
   fundingTx?: string
   /**

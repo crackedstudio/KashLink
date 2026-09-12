@@ -3,6 +3,7 @@ import { track } from './analytics'
 import { getKashlinkStatus, sweepKashlink } from './kashlink'
 import { loadLinks, saveLink, type StoredLink } from './storage'
 import { getPayoutAddress } from './wallet'
+import { claimUsdtLink, getUsdtBalance } from './usdt-links'
 
 /**
  * Status of the links this device created, and returning the money from ones nobody claimed.
@@ -29,6 +30,12 @@ export function isExpired(link: StoredLink): boolean {
 
 async function fetchStatus(link: StoredLink): Promise<LinkStatus> {
   if (link.settled) return link.settled
+  if (link.token === 'usdt') {
+    // No cheap history lookup on Polygon, so the balance is the whole signal: an empty link has
+    // either been claimed or not funded yet, and is left unsettled so it stays watched.
+    const units = await getUsdtBalance(link.address as `0x${string}`)
+    return units > 0n ? 'unclaimed' : 'pending'
+  }
   const { status } = await getKashlinkStatus(link.address)
   if (status === 'claimed') {
     // Terminal: remember it so this link is never looked up again.
@@ -70,10 +77,23 @@ export interface RevertOutcome {
 export async function revertLinks(links: StoredLink[]): Promise<RevertOutcome> {
   const outcome: RevertOutcome = { reverted: 0, failed: 0, luna: 0 }
   if (!links.length) return outcome
-  const payout = await getPayoutAddress()
+  // Both chains can appear in one batch, so each address is resolved on demand and only once.
+  let nimPayout: string | null = null
+  let evmPayout: string | null = null
   for (const link of links) {
     try {
-      await sweepKashlink(link.secret, payout)
+      if (link.token === 'usdt') {
+        if (!evmPayout) {
+          const provider = (window as { ethereum?: { request: (a: { method: string }) => Promise<string[]> } }).ethereum
+          if (!provider) throw new Error('Open KashLink in Nimiq Pay to return USDT.')
+          ;[evmPayout] = await provider.request({ method: 'eth_requestAccounts' })
+        }
+        await claimUsdtLink(link.secret, evmPayout as `0x${string}`)
+      }
+      else {
+        nimPayout ??= await getPayoutAddress()
+        await sweepKashlink(link.secret, nimPayout)
+      }
       saveLink({ ...link, settled: 'reverted', settledAt: Date.now() })
       statuses[link.address] = 'reverted'
       track('reverted', link.value, link.address)

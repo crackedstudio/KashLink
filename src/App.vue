@@ -7,14 +7,16 @@ import LinksSheet from './components/LinksSheet.vue'
 import ReadySheet from './components/ReadySheet.vue'
 import ReviewScreen from './components/ReviewScreen.vue'
 import { track } from './lib/analytics'
-import { createKashlink, type ParsedKashlink } from './lib/kashlink'
+import { createKashlink } from './lib/kashlink'
 import { isExpired, refreshStatuses } from './lib/links'
 import { getNimUsdRate } from './lib/fiat'
 import type { Currency } from './lib/format'
 import { getClient, loadNimiq, USES_RPC } from './lib/nimiq'
 import { errorMessage, isUserRejection } from './lib/provider'
 import { fundKashlink, getSpendableBalance, inNimiqPay } from './lib/wallet'
-import { loadCachedBalance, loadLinks, removeLink, saveCachedBalance, saveLink, type StoredLink } from './lib/storage'
+import { loadCachedBalance, loadLinks, removeLink, saveCachedBalance, saveLink, type StoredLink, type Token } from './lib/storage'
+import { createUsdtLink } from './lib/usdt'
+import { fundUsdtLink, getUsdtBalance } from './lib/usdt-links'
 
 type Screen = 'intro' | 'amount' | 'review' | 'claim'
 
@@ -28,6 +30,8 @@ function secretFromHash(): string {
   }
 }
 
+/** USDT links are served from /u, so the chain is known before the key is read. */
+const claimToken: Token = location.pathname.replace(/\/+$/, '').endsWith('/u') ? 'usdt' : 'nim'
 const claimSecret = ref(secretFromHash())
 const screen = ref<Screen>(claimSecret.value ? 'claim' : 'intro')
 
@@ -36,8 +40,9 @@ const balance = ref<number | null>(null)
 const balanceError = ref<string | null>(null)
 const amountLuna = ref(0)
 const amountCurrency = ref<Currency>('NIM')
+const token = ref<Token>('nim')
 /** Generated when the review screen opens; funded when the user taps Send. */
-const pendingLink = ref<ParsedKashlink | null>(null)
+const pendingLink = ref<{ secret: string, address: string, value: number } | null>(null)
 const sending = ref(false)
 const sendError = ref<string | null>(null)
 const links = ref<StoredLink[]>(loadLinks())
@@ -70,6 +75,19 @@ onMounted(() => {
 
 async function loadBalance() {
   balanceError.value = null
+  if (token.value === 'usdt') {
+    // eth_accounts does not prompt; without a known address the Hub/wallet enforces the balance instead.
+    balance.value = null
+    try {
+      const provider = (window as any).ethereum
+      const [address] = provider ? await provider.request({ method: 'eth_accounts' }) : []
+      if (address) balance.value = Number(await getUsdtBalance(address))
+    }
+    catch {
+      // leave it unknown rather than blocking the screen
+    }
+    return
+  }
   // Show the last known balance instantly; the fresh one replaces it a moment later.
   balance.value = loadCachedBalance()
   try {
@@ -97,7 +115,9 @@ async function onAmount(luna: number, currency: Currency) {
   // await between the click and opening it can cost the user-activation that lets the popup through.
   pendingLink.value = null
   try {
-    pendingLink.value = await createKashlink(luna)
+    pendingLink.value = token.value === 'usdt'
+      ? (({ secret, address, value }) => ({ secret, address, value: Number(value) }))(createUsdtLink(BigInt(luna)))
+      : await createKashlink(luna)
   }
   catch (error) {
     sendError.value = errorMessage(error)
@@ -113,12 +133,18 @@ async function send() {
     secret: kashlink.secret,
     address: kashlink.address,
     value: kashlink.value,
+    token: token.value,
     createdAt: Date.now(),
   }
   try {
     // Persist the key before any NIM moves, so the link can always be reverted.
     saveLink(link)
-    const funded = { ...link, fundingTx: await fundKashlink(link.address, link.value) }
+    const funded = {
+      ...link,
+      fundingTx: token.value === 'usdt'
+        ? await fundUsdtLink(link.address as `0x${string}`, BigInt(link.value))
+        : await fundKashlink(link.address, link.value),
+    }
     saveLink(funded)
     track('created', funded.value, funded.address)
     links.value = loadLinks()
@@ -154,17 +180,19 @@ function finishClaim() {
 </script>
 
 <template>
-  <ClaimScreen v-if="screen === 'claim'" :key="claimSecret" :secret="claimSecret" :rate @done="finishClaim" />
+  <ClaimScreen v-if="screen === 'claim'" :key="claimSecret" :secret="claimSecret" :token="claimToken" :rate @done="finishClaim" />
   <IntroScreen
     v-else-if="screen === 'intro'" :link-count="links.length" :expired-count="expiredCount"
     @next="startCreate" @show-links="showLinks = true"
   />
   <AmountScreen
-    v-else-if="screen === 'amount'" :balance :balance-error :balance-known="inNimiqPay()" :rate
+    v-else-if="screen === 'amount'" :balance :balance-error :rate :token
+    :balance-known="token === 'nim' ? inNimiqPay() : balance !== null"
     @back="screen = 'intro'" @retry="loadBalance" @continue="onAmount"
+    @update:token="token = $event; loadBalance()"
   />
   <ReviewScreen
-    v-else :luna="amountLuna" :currency="amountCurrency" :rate :sending :error="sendError"
+    v-else :luna="amountLuna" :currency="amountCurrency" :token :rate :sending :error="sendError"
     @back="screen = 'amount'" @send="send"
   />
 

@@ -1,48 +1,73 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { type Currency, formatNim, formatUsd, LUNA_PER_NIM, lunaToUsd } from '../lib/format'
+import type { Token } from '../lib/storage'
+import { USDT_ENABLED } from '../lib/usdt-links'
 import Icon from './Icon.vue'
 
 const props = defineProps<{
-  /** Luna, null while loading. */
+  /** Smallest units of the chosen token, null while loading. */
   balance: number | null
   balanceError: string | null
   /** False in a normal browser: no account is chosen yet, so the Hub shows and enforces the balance. */
   balanceKnown: boolean
   rate: number | null
+  token: Token
 }>()
-const emit = defineEmits<{ back: [], retry: [], continue: [luna: number, currency: Currency] }>()
+const emit = defineEmits<{
+  back: []
+  retry: []
+  'update:token': [token: Token]
+  continue: [units: number, currency: Currency]
+}>()
 
+const isUsdt = computed(() => props.token === 'usdt')
+/** USDT is already dollars, so there is nothing to convert and no currency to switch. */
 const currency = ref<Currency>(props.rate ? 'USD' : 'NIM')
 const input = ref('0')
 const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del']
+
+const PER_UNIT = computed(() => (isUsdt.value ? 1_000_000 : LUNA_PER_NIM))
+const DECIMALS = computed(() => (isUsdt.value ? 2 : currency.value === 'USD' ? 2 : 5))
 
 // The price can arrive after this screen opened; default to USD like MiniPay if nothing was typed yet.
 watch(() => props.rate, (rate) => {
   if (rate && input.value === '0') currency.value = 'USD'
 })
 
-const luna = computed(() => {
+function formatUnits(units: number): string {
+  return isUsdt.value ? `${(units / 1_000_000).toLocaleString('en-US', { maximumFractionDigits: 2 })} USDT` : formatNim(units)
+}
+
+const units = computed(() => {
   const n = Number(input.value)
   if (!n) return 0
-  if (currency.value === 'NIM') return Math.round(n * LUNA_PER_NIM)
+  if (isUsdt.value || currency.value === 'NIM') return Math.round(n * PER_UNIT.value)
   return props.rate ? Math.round((n / props.rate) * LUNA_PER_NIM) : 0
 })
 
 const secondary = computed(() => {
-  if (currency.value === 'USD') return `≈ ${formatNim(luna.value)}`
-  return props.rate ? `≈ ${formatUsd(lunaToUsd(luna.value, props.rate))}` : ''
+  if (isUsdt.value) return ''
+  if (currency.value === 'USD') return `≈ ${formatNim(units.value)}`
+  return props.rate ? `≈ ${formatUsd(lunaToUsd(units.value, props.rate))}` : ''
 })
 
 const balanceText = computed(() => {
   if (props.balance === null) return 'Loading…'
+  if (isUsdt.value) return formatUnits(props.balance)
   if (currency.value === 'USD' && props.rate) return formatUsd(lunaToUsd(props.balance, props.rate))
   return formatNim(props.balance)
 })
 
-const tooMuch = computed(() => props.balanceKnown && props.balance !== null && luna.value > props.balance)
+const tooMuch = computed(() => props.balanceKnown && props.balance !== null && units.value > props.balance)
 const canContinue = computed(() =>
-  luna.value > 0 && !tooMuch.value && (!props.balanceKnown || props.balance !== null))
+  units.value > 0 && !tooMuch.value && (!props.balanceKnown || props.balance !== null))
+
+function selectToken(token: Token) {
+  if (token === props.token) return
+  input.value = '0'
+  emit('update:token', token)
+}
 
 function press(key: string) {
   let value = input.value
@@ -54,7 +79,7 @@ function press(key: string) {
   }
   else {
     const decimals = value.split('.')[1]
-    if (decimals !== undefined && decimals.length >= (currency.value === 'USD' ? 2 : 5)) return
+    if (decimals !== undefined && decimals.length >= DECIMALS.value) return
     if (value.replace('.', '').length >= 12) return
     value = value === '0' ? key : value + key
   }
@@ -62,8 +87,8 @@ function press(key: string) {
 }
 
 function toggleCurrency() {
-  if (!props.rate) return
-  const current = luna.value
+  if (!props.rate || isUsdt.value) return
+  const current = units.value
   currency.value = currency.value === 'USD' ? 'NIM' : 'USD'
   if (!current) return
   input.value = currency.value === 'NIM'
@@ -80,6 +105,14 @@ function toggleCurrency() {
     <h1 class="title">
       Amount
     </h1>
+    <div v-if="USDT_ENABLED" class="tokens" role="group" aria-label="Choose what to send">
+      <button :class="{ on: token === 'nim' }" @click="selectToken('nim')">
+        NIM
+      </button>
+      <button :class="{ on: token === 'usdt' }" @click="selectToken('usdt')">
+        USDT
+      </button>
+    </div>
     <p v-if="!balanceKnown" class="balance muted">
       Your Nimiq wallet will open to confirm.
     </p>
@@ -94,9 +127,12 @@ function toggleCurrency() {
     </p>
     <div class="display">
       <div class="amount">
-        <span v-if="currency === 'USD'" class="unit">$</span>{{ input }}<span class="caret" /><span v-if="currency === 'NIM'" class="unit nim">NIM</span>
+        <span v-if="isUsdt || currency === 'USD'" class="unit">$</span>{{ input }}<span class="caret" /><span v-if="!isUsdt && currency === 'NIM'" class="unit nim">NIM</span>
       </div>
-      <button class="currency" :disabled="!rate" @click="toggleCurrency">
+      <button v-if="isUsdt" class="currency" disabled>
+        USDT
+      </button>
+      <button v-else class="currency" :disabled="!rate" @click="toggleCurrency">
         <Icon v-if="currency === 'NIM'" name="hexagon" :size="14" class="gold" />
         {{ currency }} <Icon v-if="rate" name="chevron" :size="16" />
       </button>
@@ -104,7 +140,7 @@ function toggleCurrency() {
         {{ tooMuch ? '' : secondary }}
       </p>
       <p v-if="tooMuch" class="error">
-        Not enough NIM in your wallet
+        Not enough {{ isUsdt ? 'USDT' : 'NIM' }} in your wallet
       </p>
     </div>
 
@@ -117,7 +153,7 @@ function toggleCurrency() {
       </button>
     </div>
 
-    <button class="btn btn-primary" :disabled="!canContinue" @click="emit('continue', luna, currency)">
+    <button class="btn btn-primary" :disabled="!canContinue" @click="emit('continue', units, currency)">
       Continue
     </button>
   </main>
@@ -136,6 +172,32 @@ function toggleCurrency() {
 
 .left {
   text-align: left;
+}
+
+.tokens {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 4px;
+  border-radius: 500px;
+  background: var(--highlight);
+}
+
+.tokens button {
+  flex: 1;
+  min-height: 38px;
+  border: 0;
+  border-radius: 500px;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tokens button.on {
+  background: var(--sheet, #fff);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
 }
 
 .display {

@@ -4,6 +4,7 @@ import { type Currency, formatNim, formatUsd, lunaToUsd } from '../lib/format'
 import Icon from './Icon.vue'
 
 const props = defineProps<{
+  token: 'nim' | 'usdt'
   luna: number
   currency: Currency
   rate: number | null

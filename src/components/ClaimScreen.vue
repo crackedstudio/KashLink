@@ -5,10 +5,13 @@ import { getKashlinkStatus, nimiqPaySchemeUrl, nimiqPayUrl, type ParsedKashlink,
 import { formatUsd, lunaToUsd, nimAmount } from '../lib/format'
 import { errorMessage, getProvider } from '../lib/provider'
 import { getPayoutAddress } from '../lib/wallet'
+import type { Token } from '../lib/storage'
+import { formatUsdt, parseUsdtLink } from '../lib/usdt'
+import { claimUsdtLink, getUsdtBalance } from '../lib/usdt-links'
 import Icon from './Icon.vue'
 import Logo from './Logo.vue'
 
-const props = defineProps<{ secret: string, rate: number | null }>()
+const props = defineProps<{ secret: string, token: Token, rate: number | null }>()
 const emit = defineEmits<{ done: [] }>()
 
 type State = 'loading' | 'invalid' | 'waiting' | 'unclaimed' | 'claiming' | 'claimed' | 'success'
@@ -19,7 +22,10 @@ const inNimiqPay = ref<boolean | null>(null)
 const error = ref<string | null>(null)
 let pollTimer: number | undefined
 
+const isUsdt = computed(() => props.token === 'usdt')
 const amount = computed(() => balance.value || kashlink.value?.value || 0)
+const amountText = computed(() => (isUsdt.value ? formatUsdt(BigInt(amount.value)) : nimAmount(amount.value)))
+const unitText = computed(() => (isUsdt.value ? 'USDT' : 'NIM'))
 const heading = computed(() => ({
   loading: 'Opening KashLink…',
   invalid: 'This KashLink is not valid',
@@ -61,7 +67,7 @@ function openInNimiqPay() {
   catch {
     return // private mode: don't risk a redirect loop
   }
-  location.href = nimiqPaySchemeUrl(props.secret)
+  location.href = nimiqPaySchemeUrl(props.secret, props.token)
 }
 
 // A claim in flight or done must not be overwritten by a status refresh.
@@ -70,6 +76,13 @@ const isBusy = () => state.value === 'claiming' || state.value === 'success'
 async function refresh() {
   if (!kashlink.value || isBusy()) return
   try {
+    if (isUsdt.value) {
+      const units = await getUsdtBalance(kashlink.value.address as `0x${string}`)
+      if (isBusy()) return
+      balance.value = Number(units)
+      state.value = units > 0n ? 'unclaimed' : 'waiting'
+      return
+    }
     const result = await getKashlinkStatus(kashlink.value.address)
     if (isBusy()) return
     balance.value = result.balance
@@ -88,7 +101,9 @@ onMounted(async () => {
     openInNimiqPay()
   }
   getProvider().then(() => (inNimiqPay.value = true), () => (inNimiqPay.value = false))
-  kashlink.value = await parseKashlink(props.secret)
+  kashlink.value = isUsdt.value
+    ? (p => (p ? { secret: p.secret, address: p.address, value: Number(p.value), message: '' } : null))(parseUsdtLink(props.secret))
+    : await parseKashlink(props.secret)
   if (!kashlink.value) {
     state.value = 'invalid'
     return
@@ -106,8 +121,16 @@ async function claim() {
   error.value = null
   state.value = 'claiming'
   try {
-    const recipient = await getPayoutAddress()
-    await sweepKashlink(props.secret, recipient)
+    if (isUsdt.value) {
+      const provider = (window as any).ethereum
+      if (!provider) throw new Error('Open this link in Nimiq Pay to claim USDT.')
+      const [recipient] = await provider.request({ method: 'eth_requestAccounts' })
+      if (!recipient) throw new Error('No wallet address available.')
+      await claimUsdtLink(props.secret, recipient)
+    }
+    else {
+      await sweepKashlink(props.secret, await getPayoutAddress())
+    }
     state.value = 'success'
     if (kashlink.value) track('claimed', amount.value, kashlink.value.address)
   }
@@ -132,9 +155,10 @@ async function claim() {
       </p>
       <template v-if="kashlink">
         <div class="amount">
-          <span :class="amountClass">{{ nimAmount(amount) }}</span><span class="unit">NIM</span>
+          <span :class="amountClass">{{ amountText }}</span><span class="unit">{{ unitText }}</span>
         </div>
-        <p v-if="rate" class="fiat muted">
+        <!-- USDT is already dollars; only NIM needs converting. -->
+        <p v-if="rate && !isUsdt" class="fiat muted">
           ≈ {{ formatUsd(lunaToUsd(amount, rate)) }}
         </p>
         <p v-if="kashlink.message" class="message">
@@ -145,10 +169,10 @@ async function claim() {
         Connecting to the Nimiq network…
       </p>
       <p v-else-if="state === 'waiting'" class="status muted">
-        The deposit hasn't arrived yet. This page updates automatically.
+        The deposit hasn't arrived yet, or it was already claimed. This page updates automatically.
       </p>
       <p v-else-if="state === 'success'" class="status muted">
-        The NIM is on its way to your Nimiq Pay wallet.
+        The {{ unitText }} is on its way to your wallet.
       </p>
     </div>
 
@@ -170,7 +194,7 @@ async function claim() {
         </template>
       </button>
       <p v-if="inNimiqPay === false" class="hint muted">
-        Have Nimiq Pay? <a :href="nimiqPayUrl(secret)">Open it there instead</a>
+        Have Nimiq Pay? <a :href="nimiqPayUrl(secret, token)">Open it there instead</a>
       </p>
     </template>
 
