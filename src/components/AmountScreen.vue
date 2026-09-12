@@ -13,6 +13,7 @@ const props = defineProps<{
   balanceKnown: boolean
   rate: number | null
   token: Token
+  diagnostics: string[]
 }>()
 const emit = defineEmits<{
   back: []
@@ -105,6 +106,9 @@ function toggleCurrency() {
     <h1 class="title">
       Amount
     </h1>
+    <ul v-if="diagnostics.length && token === 'usdt'" class="diag muted">
+      <li v-for="line in diagnostics" :key="line">{{ line }}</li>
+    </ul>
     <div v-if="USDT_ENABLED" class="tokens" role="group" aria-label="Choose what to send">
       <button :class="{ on: token === 'nim' }" @click="selectToken('nim')">
         NIM
@@ -172,6 +176,14 @@ function toggleCurrency() {
 
 .left {
   text-align: left;
+}
+
+.diag {
+  margin: 6px 0 0;
+  padding: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  list-style: none;
 }
 
 .tokens {

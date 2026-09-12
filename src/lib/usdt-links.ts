@@ -60,14 +60,27 @@ function ethereum(): { request: (args: { method: string, params?: unknown[] }) =
   return provider
 }
 
+/** Every address the wallet exposes, and what each holds. Nimiq Pay returns more than one. */
+export async function getUsdtAccounts(prompt = false): Promise<{ address: Hex, balance: bigint }[]> {
+  const provider = (window as any).ethereum
+  if (!provider) return []
+  const addresses = await provider.request({
+    method: prompt ? 'eth_requestAccounts' : 'eth_accounts',
+  }) as Hex[]
+  return Promise.all(addresses.map(async address => ({ address, balance: await getUsdtBalance(address) })))
+}
+
 /**
  * Moves `amount` USDT from the user's wallet into the link address. The user signs; the relayer
  * pays the gas. Requires one signature approval and no POL.
  */
 export async function fundUsdtLink(linkAddress: Hex, amount: bigint): Promise<Hex> {
   const provider = ethereum()
-  const [from] = await provider.request({ method: 'eth_requestAccounts' }) as Hex[]
-  if (!from) throw new Error('No wallet address available.')
+  const accounts = await getUsdtAccounts(true)
+  if (!accounts.length) throw new Error('No wallet address available.')
+  // The wallet lists several addresses and the first is often empty, so spend from one that can
+  // actually cover it rather than whichever happens to come back first.
+  const from = (accounts.find(a => a.balance >= amount) ?? accounts[0]).address
 
   const { domain, types, primaryType, message, functionSignature } = transferTypedData(
     from,

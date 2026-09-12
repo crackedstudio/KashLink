@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { type Currency, formatNim, formatUsd, lunaToUsd } from '../lib/format'
+import { formatUsdt } from '../lib/usdt'
 import Icon from './Icon.vue'
 
 const props = defineProps<{
@@ -14,9 +15,21 @@ const props = defineProps<{
 const emit = defineEmits<{ back: [], send: [] }>()
 
 const showHelp = ref(false)
-const usd = computed(() => (props.rate ? formatUsd(lunaToUsd(props.luna, props.rate)) : null))
-const primary = computed(() => (props.currency === 'USD' && usd.value ? usd.value : formatNim(props.luna)))
-const secondary = computed(() => (props.currency === 'USD' ? formatNim(props.luna) : usd.value && `≈ ${usd.value}`))
+const isUsdt = computed(() => props.token === 'usdt')
+/** `luna` carries the chosen token's smallest unit: luna for NIM, 6-decimal units for USDT. */
+const amount = computed(() => (isUsdt.value ? `${formatUsdt(BigInt(props.luna))} USDT` : formatNim(props.luna)))
+const usd = computed(() => (props.rate && !isUsdt.value ? formatUsd(lunaToUsd(props.luna, props.rate)) : null))
+const primary = computed(() => {
+  if (isUsdt.value) return `$${formatUsdt(BigInt(props.luna))}`
+  return props.currency === 'USD' && usd.value ? usd.value : formatNim(props.luna)
+})
+const secondary = computed(() => {
+  if (isUsdt.value) return amount.value
+  return props.currency === 'USD' ? formatNim(props.luna) : usd.value && `≈ ${usd.value}`
+})
+const feeNote = computed(() => (isUsdt.value
+  ? 'The gas is paid for you, so the total is exactly what your friend receives.'
+  : 'Nimiq transactions are free, so the total is exactly what your friend receives.'))
 </script>
 
 <template>
@@ -45,7 +58,7 @@ const secondary = computed(() => (props.currency === 'USD' ? formatNim(props.lun
     <div class="card details">
       <div class="row">
         <span class="muted">Amount</span>
-        <strong>{{ formatNim(luna) }}</strong>
+        <strong>{{ amount }}</strong>
       </div>
       <div class="row">
         <span class="muted">Network fee</span>
@@ -57,10 +70,10 @@ const secondary = computed(() => (props.currency === 'USD' ? formatNim(props.lun
             <Icon name="help" :size="18" />
           </button>
         </span>
-        <strong>{{ formatNim(luna) }}</strong>
+        <strong>{{ amount }}</strong>
       </div>
       <p v-if="showHelp" class="help muted">
-        Nimiq transactions are free, so the total is exactly what your friend receives.
+        {{ feeNote }}
       </p>
     </div>
 
@@ -72,7 +85,7 @@ const secondary = computed(() => (props.currency === 'USD' ? formatNim(props.lun
         <span class="spinner" /> Confirm in Nimiq Pay…
       </template>
       <template v-else>
-        Send {{ formatNim(luna) }}
+        Send {{ amount }}
       </template>
     </button>
   </main>

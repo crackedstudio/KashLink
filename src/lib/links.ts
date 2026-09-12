@@ -67,7 +67,8 @@ export async function refreshStatuses(links: StoredLink[] = loadLinks()): Promis
 export interface RevertOutcome {
   reverted: number
   failed: number
-  luna: number
+  /** The links that came back, so totals can be shown in each token's own units. */
+  links: StoredLink[]
 }
 
 /**
@@ -75,7 +76,7 @@ export interface RevertOutcome {
  * then sweeps one at a time — each sweep is several RPC calls, and a failure must not stop the rest.
  */
 export async function revertLinks(links: StoredLink[]): Promise<RevertOutcome> {
-  const outcome: RevertOutcome = { reverted: 0, failed: 0, luna: 0 }
+  const outcome: RevertOutcome = { reverted: 0, failed: 0, links: [] }
   if (!links.length) return outcome
   // Both chains can appear in one batch, so each address is resolved on demand and only once.
   let nimPayout: string | null = null
@@ -98,7 +99,7 @@ export async function revertLinks(links: StoredLink[]): Promise<RevertOutcome> {
       statuses[link.address] = 'reverted'
       track('reverted', link.value, link.address)
       outcome.reverted++
-      outcome.luna += link.value
+      outcome.links.push(link)
     }
     catch {
       outcome.failed++
