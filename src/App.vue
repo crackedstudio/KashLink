@@ -6,6 +6,7 @@ import IntroScreen from './components/IntroScreen.vue'
 import LinksSheet from './components/LinksSheet.vue'
 import ReadySheet from './components/ReadySheet.vue'
 import ReviewScreen from './components/ReviewScreen.vue'
+import { track } from './lib/analytics'
 import { createKashlink } from './lib/kashlink'
 import { getNimUsdRate } from './lib/fiat'
 import type { Currency } from './lib/format'
@@ -101,6 +102,7 @@ async function send() {
     }))
     link = { ...link, fundingTx }
     saveLink(link)
+    track('created', link.value, link.address)
     links.value = loadLinks()
     readyLink.value = link
     screen.value = 'intro'

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { track } from '../lib/analytics'
 import { getKashlinkStatus, shareUrl, sweepKashlink } from '../lib/kashlink'
 import { formatDate, formatNim, formatUsd, lunaToUsd, nimAmount } from '../lib/format'
 import { errorMessage, getPayoutAddress } from '../lib/provider'
@@ -67,6 +68,7 @@ async function revert() {
   try {
     await sweepKashlink(props.link.secret, await getPayoutAddress())
     reverted.value = true
+    track('reverted', props.link.value, props.link.address)
   }
   catch (e) {
     error.value = errorMessage(e)

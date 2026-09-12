@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { track } from '../lib/analytics'
 import { getKashlinkStatus, hubClaimUrl, nimiqPaySchemeUrl, nimiqPayUrl, type ParsedKashlink, parseKashlink, sweepKashlink } from '../lib/kashlink'
 import { formatUsd, lunaToUsd, nimAmount } from '../lib/format'
 import { errorMessage, getPayoutAddress, getProvider } from '../lib/provider'
@@ -107,6 +108,7 @@ async function claim() {
     const recipient = await getPayoutAddress()
     await sweepKashlink(props.secret, recipient)
     state.value = 'success'
+    if (kashlink.value) track('claimed', amount.value, kashlink.value.address)
   }
   catch (e) {
     error.value = errorMessage(e)
