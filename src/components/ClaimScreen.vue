@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { track } from '../lib/analytics'
-import { getKashlinkStatus, hubClaimUrl, nimiqPaySchemeUrl, nimiqPayUrl, type ParsedKashlink, parseKashlink, sweepKashlink } from '../lib/kashlink'
+import { getKashlinkStatus, nimiqPaySchemeUrl, nimiqPayUrl, type ParsedKashlink, parseKashlink, sweepKashlink } from '../lib/kashlink'
 import { formatUsd, lunaToUsd, nimAmount } from '../lib/format'
-import { errorMessage, getPayoutAddress, getProvider } from '../lib/provider'
+import { errorMessage, getProvider } from '../lib/provider'
+import { getPayoutAddress } from '../lib/wallet'
 import Icon from './Icon.vue'
 import Logo from './Logo.vue'
 
@@ -158,23 +159,19 @@ async function claim() {
     </p>
 
     <template v-if="state === 'unclaimed' || state === 'claiming'">
-      <button v-if="inNimiqPay !== false" class="btn btn-primary" :disabled="!inNimiqPay || state === 'claiming'" @click="claim">
+      <!-- Works in both hosts: inside Nimiq Pay the wallet is the injected provider, in a browser
+           it is the Nimiq Hub. Either way the claim itself is signed with the link's own key. -->
+      <button class="btn btn-primary" :disabled="state === 'claiming'" @click="claim">
         <template v-if="state === 'claiming'">
           <span class="spinner" /> Claiming…
-        </template>
-        <template v-else-if="inNimiqPay === null">
-          <span class="spinner" /> Connecting to Nimiq Pay…
         </template>
         <template v-else>
           Claim cash
         </template>
       </button>
-      <template v-else>
-        <a class="btn btn-primary" :href="nimiqPayUrl(secret)">Open in Nimiq Pay</a>
-        <p class="hint muted">
-          No Nimiq Pay? <a :href="hubClaimUrl(secret)">Claim with the Nimiq web wallet</a>
-        </p>
-      </template>
+      <p v-if="inNimiqPay === false" class="hint muted">
+        Have Nimiq Pay? <a :href="nimiqPayUrl(secret)">Open it there instead</a>
+      </p>
     </template>
 
     <button v-else-if="state !== 'loading' && state !== 'waiting'" class="btn btn-primary" @click="emit('done')">

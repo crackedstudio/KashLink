@@ -7,11 +7,12 @@ import LinksSheet from './components/LinksSheet.vue'
 import ReadySheet from './components/ReadySheet.vue'
 import ReviewScreen from './components/ReviewScreen.vue'
 import { track } from './lib/analytics'
-import { createKashlink } from './lib/kashlink'
+import { createKashlink, type ParsedKashlink } from './lib/kashlink'
 import { getNimUsdRate } from './lib/fiat'
 import type { Currency } from './lib/format'
-import { getClient, getTotalBalance, loadNimiq, USES_RPC } from './lib/nimiq'
-import { errorMessage, getProvider, getUserAddresses, isUserRejection, unwrap } from './lib/provider'
+import { getClient, loadNimiq, USES_RPC } from './lib/nimiq'
+import { errorMessage, isUserRejection } from './lib/provider'
+import { fundKashlink, getSpendableBalance, inNimiqPay } from './lib/wallet'
 import { loadCachedBalance, loadLinks, removeLink, saveCachedBalance, saveLink, type StoredLink } from './lib/storage'
 
 type Screen = 'intro' | 'amount' | 'review' | 'claim'
@@ -34,6 +35,8 @@ const balance = ref<number | null>(null)
 const balanceError = ref<string | null>(null)
 const amountLuna = ref(0)
 const amountCurrency = ref<Currency>('NIM')
+/** Generated when the review screen opens; funded when the user taps Send. */
+const pendingLink = ref<ParsedKashlink | null>(null)
 const sending = ref(false)
 const sendError = ref<string | null>(null)
 const links = ref<StoredLink[]>(loadLinks())
@@ -63,8 +66,8 @@ async function loadBalance() {
   // Show the last known balance instantly; the fresh one replaces it a moment later.
   balance.value = loadCachedBalance()
   try {
-    balance.value = await getTotalBalance(await getUserAddresses())
-    saveCachedBalance(balance.value)
+    balance.value = await getSpendableBalance()
+    if (balance.value !== null) saveCachedBalance(balance.value)
   }
   catch (error) {
     balance.value = null
@@ -78,38 +81,47 @@ function startCreate() {
   if (!rate.value) getNimUsdRate().then(value => (rate.value = value))
 }
 
-function onAmount(luna: number, currency: Currency) {
+async function onAmount(luna: number, currency: Currency) {
   amountLuna.value = luna
   amountCurrency.value = currency
   sendError.value = null
   screen.value = 'review'
+  // Generate the link now rather than inside send(). In a browser the wallet is a Hub popup, and an
+  // await between the click and opening it can cost the user-activation that lets the popup through.
+  pendingLink.value = null
+  try {
+    pendingLink.value = await createKashlink(luna)
+  }
+  catch (error) {
+    sendError.value = errorMessage(error)
+  }
 }
 
 async function send() {
+  const kashlink = pendingLink.value
+  if (!kashlink) return
   sending.value = true
   sendError.value = null
-  let link: StoredLink | null = null
+  const link: StoredLink = {
+    secret: kashlink.secret,
+    address: kashlink.address,
+    value: kashlink.value,
+    createdAt: Date.now(),
+  }
   try {
-    const provider = await getProvider()
-    const kashlink = await createKashlink(amountLuna.value)
-    link = { secret: kashlink.secret, address: kashlink.address, value: kashlink.value, createdAt: Date.now() }
     // Persist the key before any NIM moves, so the link can always be reverted.
     saveLink(link)
-    const fundingTx = unwrap(await provider.sendBasicTransactionWithData({
-      recipient: kashlink.address,
-      value: kashlink.value,
-      data: 'KashLink',
-    }))
-    link = { ...link, fundingTx }
-    saveLink(link)
-    track('created', link.value, link.address)
+    const funded = { ...link, fundingTx: await fundKashlink(link.address, link.value) }
+    saveLink(funded)
+    track('created', funded.value, funded.address)
     links.value = loadLinks()
-    readyLink.value = link
+    readyLink.value = funded
+    pendingLink.value = null
     screen.value = 'intro'
   }
   catch (error) {
     // Nothing was sent when the user declined, so the unused key can go.
-    if (link && isUserRejection(error)) removeLink(link.address)
+    if (isUserRejection(error)) removeLink(link.address)
     sendError.value = errorMessage(error)
   }
   finally {
@@ -138,7 +150,7 @@ function finishClaim() {
   <ClaimScreen v-if="screen === 'claim'" :key="claimSecret" :secret="claimSecret" :rate @done="finishClaim" />
   <IntroScreen v-else-if="screen === 'intro'" :link-count="links.length" @next="startCreate" @show-links="showLinks = true" />
   <AmountScreen
-    v-else-if="screen === 'amount'" :balance :balance-error :rate
+    v-else-if="screen === 'amount'" :balance :balance-error :balance-known="inNimiqPay()" :rate
     @back="screen = 'intro'" @retry="loadBalance" @continue="onAmount"
   />
   <ReviewScreen

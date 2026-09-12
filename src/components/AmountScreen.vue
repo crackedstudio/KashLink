@@ -7,6 +7,8 @@ const props = defineProps<{
   /** Luna, null while loading. */
   balance: number | null
   balanceError: string | null
+  /** False in a normal browser: no account is chosen yet, so the Hub shows and enforces the balance. */
+  balanceKnown: boolean
   rate: number | null
 }>()
 const emit = defineEmits<{ back: [], retry: [], continue: [luna: number, currency: Currency] }>()
@@ -38,8 +40,9 @@ const balanceText = computed(() => {
   return formatNim(props.balance)
 })
 
-const tooMuch = computed(() => props.balance !== null && luna.value > props.balance)
-const canContinue = computed(() => luna.value > 0 && props.balance !== null && !tooMuch.value)
+const tooMuch = computed(() => props.balanceKnown && props.balance !== null && luna.value > props.balance)
+const canContinue = computed(() =>
+  luna.value > 0 && !tooMuch.value && (!props.balanceKnown || props.balance !== null))
 
 function press(key: string) {
   let value = input.value
@@ -77,7 +80,10 @@ function toggleCurrency() {
     <h1 class="title">
       Amount
     </h1>
-    <p v-if="balanceError" class="balance error left">
+    <p v-if="!balanceKnown" class="balance muted">
+      Your Nimiq wallet will open to confirm.
+    </p>
+    <p v-else-if="balanceError" class="balance error left">
       {{ balanceError }}
       <button class="link-btn" @click="emit('retry')">
         Retry

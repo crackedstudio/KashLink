@@ -1,4 +1,4 @@
-import { getAccounts, getHeadHeight, getNetworkId, getTransactions, IS_MAINNET, loadNimiq, sendTransaction } from './nimiq'
+import { getAccounts, getHeadHeight, getNetworkId, getTransactions, loadNimiq, sendTransaction } from './nimiq'
 
 /*
  * A KashLink is a throwaway Nimiq address. The link's #fragment carries its private key
@@ -147,7 +147,3 @@ export function nimiqPaySchemeUrl(secret: string): string {
   return `nimiqpay://miniapp?url=${encodeURIComponent(linkUrl(secret))}`
 }
 
-/** Fallback for recipients outside Nimiq Pay: the Nimiq Hub understands the same link format. */
-export function hubClaimUrl(secret: string): string {
-  return `${IS_MAINNET ? 'https://hub.nimiq.com' : 'https://hub.nimiq-testnet.com'}/cashlink/#${secret}`
-}

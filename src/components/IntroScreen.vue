@@ -6,9 +6,9 @@ defineProps<{ linkCount: number }>()
 const emit = defineEmits<{ next: [], showLinks: [] }>()
 
 const steps = [
-  { title: 'Deposit to the KashLink', text: 'From your Nimiq Pay wallet' },
+  { title: 'Deposit to the KashLink', text: 'From your Nimiq wallet' },
   { title: 'Share the link', text: 'Anyone with the link can claim the cash' },
-  { title: 'Your friend receives the NIM', text: 'When they open it in Nimiq Pay' },
+  { title: 'Your friend receives the NIM', text: 'When they open your link' },
 ]
 </script>
 

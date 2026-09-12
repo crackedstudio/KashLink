@@ -1,5 +1,4 @@
 import { type ErrorResponse, init, type NimiqProvider } from '@nimiq/mini-app-sdk'
-import { getAccounts } from './nimiq'
 
 let providerPromise: Promise<NimiqProvider> | null = null
 let userAddressesPromise: Promise<string[]> | null = null
@@ -45,17 +44,6 @@ export function getUserAddresses(): Promise<string[]> {
   return userAddressesPromise
 }
 
-/**
- * The user's address that can receive NIM (claims and reverts go here). Nimiq Pay also lists contract
- * addresses, e.g. the HTLC it keeps the balance in; transfers into those are included but fail on-chain.
- */
-export async function getPayoutAddress(): Promise<string> {
-  const addresses = await getUserAddresses()
-  const accounts = await getAccounts(addresses)
-  const index = accounts.findIndex(account => account.type === 'basic')
-  if (index === -1) throw new Error('Your wallet has no regular Nimiq address to receive NIM.')
-  return addresses[index]
-}
 
 export function isUserRejection(error: unknown): boolean {
   const { type = '', name = '', message = '' } = (error ?? {}) as { type?: string, name?: string, message?: string }
