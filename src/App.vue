@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import AmountScreen from './components/AmountScreen.vue'
 import ClaimScreen from './components/ClaimScreen.vue'
 import IntroScreen from './components/IntroScreen.vue'
@@ -8,6 +8,7 @@ import ReadySheet from './components/ReadySheet.vue'
 import ReviewScreen from './components/ReviewScreen.vue'
 import { track } from './lib/analytics'
 import { createKashlink, type ParsedKashlink } from './lib/kashlink'
+import { isExpired, refreshStatuses } from './lib/links'
 import { getNimUsdRate } from './lib/fiat'
 import type { Currency } from './lib/format'
 import { getClient, loadNimiq, USES_RPC } from './lib/nimiq'
@@ -42,6 +43,7 @@ const sendError = ref<string | null>(null)
 const links = ref<StoredLink[]>(loadLinks())
 const readyLink = ref<StoredLink | null>(null)
 const showLinks = ref(false)
+const expiredCount = computed(() => links.value.filter(isExpired).length)
 
 onMounted(() => {
   // Tapping another KashLink while KashLink is already open in Nimiq Pay only changes the #hash,
@@ -54,6 +56,11 @@ onMounted(() => {
     showLinks.value = false
     screen.value = 'claim'
   })
+  // Check the sender's own links in the background, so an expired one can be flagged on the intro
+  // screen. Skipped when opening someone else's link, where these are not ours to care about.
+  if (screen.value !== 'claim' && links.value.length) {
+    refreshStatuses(links.value).catch(() => {})
+  }
   // Compile the key/transaction WASM now so creating a link is instant later.
   loadNimiq().catch(error => console.warn('Nimiq module failed to load', error))
   // Without an RPC server, balances come from the light client: start syncing it right away.
@@ -148,7 +155,10 @@ function finishClaim() {
 
 <template>
   <ClaimScreen v-if="screen === 'claim'" :key="claimSecret" :secret="claimSecret" :rate @done="finishClaim" />
-  <IntroScreen v-else-if="screen === 'intro'" :link-count="links.length" @next="startCreate" @show-links="showLinks = true" />
+  <IntroScreen
+    v-else-if="screen === 'intro'" :link-count="links.length" :expired-count="expiredCount"
+    @next="startCreate" @show-links="showLinks = true"
+  />
   <AmountScreen
     v-else-if="screen === 'amount'" :balance :balance-error :balance-known="inNimiqPay()" :rate
     @back="screen = 'intro'" @retry="loadBalance" @continue="onAmount"
@@ -158,6 +168,6 @@ function finishClaim() {
     @back="screen = 'amount'" @send="send"
   />
 
-  <LinksSheet v-if="showLinks" :links @open="openLink" @close="showLinks = false" />
+  <LinksSheet v-if="showLinks" :links @open="openLink" @changed="links = loadLinks()" @close="showLinks = false" />
   <ReadySheet v-if="readyLink" :key="readyLink.address" :link="readyLink" :rate @close="closeReady" />
 </template>

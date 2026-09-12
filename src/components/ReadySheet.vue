@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { track } from '../lib/analytics'
-import { getKashlinkStatus, shareUrl, sweepKashlink } from '../lib/kashlink'
+import { shareUrl } from '../lib/kashlink'
 import { formatDate, formatNim, formatUsd, lunaToUsd, nimAmount } from '../lib/format'
+import { refreshStatuses, revertLinks, statuses } from '../lib/links'
 import { errorMessage } from '../lib/provider'
-import { getPayoutAddress } from '../lib/wallet'
 import type { StoredLink } from '../lib/storage'
 import Icon from './Icon.vue'
 
@@ -24,8 +23,8 @@ const claimed = ref(false)
 const error = ref<string | null>(null)
 
 onMounted(() => {
-  getKashlinkStatus(props.link.address)
-    .then(({ status }) => (claimed.value = status === 'claimed'))
+  refreshStatuses([props.link])
+    .then(() => (claimed.value = statuses[props.link.address] === 'claimed'))
     .catch(() => {})
 })
 
@@ -67,9 +66,9 @@ async function revert() {
   reverting.value = true
   error.value = null
   try {
-    await sweepKashlink(props.link.secret, await getPayoutAddress())
-    reverted.value = true
-    track('reverted', props.link.value, props.link.address)
+    const { reverted: count } = await revertLinks([props.link])
+    if (count) reverted.value = true
+    else error.value = 'Could not return the NIM. Try again in a moment.'
   }
   catch (e) {
     error.value = errorMessage(e)

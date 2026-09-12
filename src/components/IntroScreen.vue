@@ -2,7 +2,7 @@
 import Icon from './Icon.vue'
 import Logo from './Logo.vue'
 
-defineProps<{ linkCount: number }>()
+defineProps<{ linkCount: number, expiredCount: number }>()
 const emit = defineEmits<{ next: [], showLinks: [] }>()
 
 const steps = [
@@ -89,7 +89,11 @@ const steps = [
 
     <div class="spacer" />
 
-    <button v-if="linkCount" class="link-btn links" @click="emit('showLinks')">
+    <button v-if="expiredCount" class="expired-nudge" @click="emit('showLinks')">
+      <Icon name="alert" :size="18" />
+      <span>{{ expiredCount }} unclaimed link{{ expiredCount > 1 ? 's' : '' }} — take the NIM back</span>
+    </button>
+    <button v-else-if="linkCount" class="link-btn links" @click="emit('showLinks')">
       <Icon name="link" :size="18" /> Your KashLinks ({{ linkCount }})
     </button>
     <button class="btn btn-primary" @click="emit('next')">
@@ -189,5 +193,22 @@ const steps = [
   justify-content: center;
   gap: 6px;
   margin-bottom: 4px;
+}
+
+.expired-nudge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: 8px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--highlight);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
 }
 </style>

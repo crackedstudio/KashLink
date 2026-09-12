@@ -5,6 +5,12 @@ export interface StoredLink {
   value: number
   createdAt: number
   fundingTx?: string
+  /**
+   * Terminal state, cached once the funds have left the link. The public RPC has no batch call, so
+   * every link costs a request; once a link is settled it can never change again and is never queried.
+   */
+  settled?: 'claimed' | 'reverted'
+  settledAt?: number
 }
 
 // The link's private key only lives here (and in the shared link). Losing it before the link is
