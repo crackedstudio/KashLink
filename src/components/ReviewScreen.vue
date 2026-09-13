@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { type Currency, formatNim, formatUsd, lunaToUsd } from '../lib/format'
-import { formatUsdt } from '../lib/usdt'
+import { feeFor, formatUsdt } from '../lib/usdt'
 import Icon from './Icon.vue'
 
 const props = defineProps<{
@@ -27,8 +27,13 @@ const secondary = computed(() => {
   if (isUsdt.value) return amount.value
   return props.currency === 'USD' ? formatNim(props.luna) : usd.value && `≈ ${usd.value}`
 })
+const fee = computed(() => (isUsdt.value ? feeFor(BigInt(props.luna)) : 0n))
+const feeText = computed(() => `${formatUsdt(fee.value)} USDT`)
+const totalText = computed(() => (isUsdt.value
+  ? `${formatUsdt(BigInt(props.luna) + fee.value)} USDT`
+  : amount.value))
 const feeNote = computed(() => (isUsdt.value
-  ? 'The gas is paid for you, so the total is exactly what your friend receives.'
+  ? 'Your friend receives the full amount. The fee covers sending it without you needing POL for gas.'
   : 'Nimiq transactions are free, so the total is exactly what your friend receives.'))
 </script>
 
@@ -61,8 +66,8 @@ const feeNote = computed(() => (isUsdt.value
         <strong>{{ amount }}</strong>
       </div>
       <div class="row">
-        <span class="muted">Network fee</span>
-        <strong class="green">Free</strong>
+        <span class="muted">{{ isUsdt ? 'Service fee' : 'Network fee' }}</span>
+        <strong :class="{ green: !isUsdt }">{{ isUsdt ? feeText : 'Free' }}</strong>
       </div>
       <div class="row total">
         <span>Total
@@ -70,7 +75,7 @@ const feeNote = computed(() => (isUsdt.value
             <Icon name="help" :size="18" />
           </button>
         </span>
-        <strong>{{ amount }}</strong>
+        <strong>{{ totalText }}</strong>
       </div>
       <p v-if="showHelp" class="help muted">
         {{ feeNote }}
@@ -85,7 +90,7 @@ const feeNote = computed(() => (isUsdt.value
         <span class="spinner" /> Confirm in Nimiq Pay…
       </template>
       <template v-else>
-        Send {{ amount }}
+        Send {{ totalText }}
       </template>
     </button>
   </main>

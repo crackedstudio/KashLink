@@ -1,9 +1,11 @@
 import { createPublicClient, http, type Hex } from 'viem'
 import { polygon } from 'viem/chains'
 import {
+  feeFor,
   linkAccount,
   POLYGON_CHAIN_ID,
   splitSignature,
+  TREASURY_ADDRESS,
   transferTypedData,
   USDT_ABI,
   USDT_ADDRESS,
@@ -41,16 +43,30 @@ interface SignedMetaTx {
   v: number
 }
 
-async function relay(tx: SignedMetaTx): Promise<Hex> {
+/** Submits one or more signed meta-transactions. Several are executed in the order given. */
+async function relay(...transactions: SignedMetaTx[]): Promise<Hex> {
   if (!RELAY_URL) throw new Error('USDT links are not configured.')
   const response = await fetch(RELAY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...tx, v: Number(tx.v) }),
+    body: JSON.stringify(transactions.length === 1
+      ? { ...transactions[0], v: Number(transactions[0].v) }
+      : { transactions: transactions.map(t => ({ ...t, v: Number(t.v) })) }),
   })
-  const body = await response.json().catch(() => ({})) as { hash?: Hex, error?: string }
-  if (!response.ok || !body.hash) throw new Error(body.error || 'The transfer could not be submitted.')
-  return body.hash
+  const body = await response.json().catch(() => ({})) as { hash?: Hex, hashes?: Hex[], error?: string }
+  const hash = body.hash ?? body.hashes?.[0]
+  if (!response.ok || !hash) throw new Error(body.error || 'The transfer could not be submitted.')
+  return hash
+}
+
+/** Signs a transfer with the link's own key. No user interaction: the key is in the link. */
+async function signAsLink(secret: string, to: Hex, amount: bigint, nonce: bigint): Promise<SignedMetaTx> {
+  const account = linkAccount(secret)
+  const { domain, types, primaryType, message, functionSignature } = transferTypedData(
+    account.address, to, amount, nonce,
+  )
+  const signature = await account.signTypedData({ domain, types, primaryType, message })
+  return { from: account.address, functionSignature, ...splitSignature(signature) }
 }
 
 /** The EVM provider Nimiq Pay injects, or an EIP-1193 wallet in a browser. */
@@ -75,17 +91,19 @@ export async function getUsdtAccounts(prompt = false): Promise<{ address: Hex, b
  * pays the gas. Requires one signature approval and no POL.
  */
 export async function fundUsdtLink(linkAddress: Hex, amount: bigint): Promise<Hex> {
+  // The fee rides along into the link and is only split out if someone claims it.
+  const total = amount + feeFor(amount)
   const provider = ethereum()
   const accounts = await getUsdtAccounts(true)
   if (!accounts.length) throw new Error('No wallet address available.')
   // The wallet lists several addresses and the first is often empty, so spend from one that can
   // actually cover it rather than whichever happens to come back first.
-  const from = (accounts.find(a => a.balance >= amount) ?? accounts[0]).address
+  const from = (accounts.find(a => a.balance >= total) ?? accounts[0]).address
 
   const { domain, types, primaryType, message, functionSignature } = transferTypedData(
     from,
     linkAddress,
-    amount,
+    total,
     await getNonce(from),
   )
   const signature = await provider.request({
@@ -111,19 +129,25 @@ export async function fundUsdtLink(linkAddress: Hex, amount: bigint): Promise<He
  * Sweeps the link's whole USDT balance to `recipient`, signed with the link's own key. Nobody needs
  * a wallet for this beyond an address to receive it.
  */
-export async function claimUsdtLink(secret: string, recipient: Hex): Promise<Hex> {
+export async function claimUsdtLink(secret: string, recipient: Hex, value?: bigint): Promise<Hex> {
   const account = linkAccount(secret)
   const balance = await getUsdtBalance(account.address)
   if (!balance) throw new Error('This KashLink is empty. It was already claimed, or the deposit has not arrived yet.')
 
-  const { domain, types, primaryType, message, functionSignature } = transferTypedData(
-    account.address,
-    recipient,
-    balance,
-    await getNonce(account.address),
+  // A link holds the amount it promised plus its fee. Omitting `value` means sweep everything and
+  // charge nothing — that is a revert, where the sender gets their money back in full.
+  const fee = value === undefined ? 0n : feeFor(value)
+  const nonce = await getNonce(account.address)
+  if (fee === 0n || value === undefined || balance < value + fee) {
+    // Also the short-funded case: pay out whatever is there rather than failing, and take no fee.
+    return relay(await signAsLink(secret, recipient, balance, nonce))
+  }
+  // Two transfers signed by the link's own key, so the claimer sees no extra prompt. They must run in
+  // order: each meta-transaction consumes the next nonce.
+  return relay(
+    await signAsLink(secret, recipient, value, nonce),
+    await signAsLink(secret, TREASURY_ADDRESS, fee, nonce + 1n),
   )
-  const signature = await account.signTypedData({ domain, types, primaryType, message })
-  return relay({ from: account.address, functionSignature, ...splitSignature(signature) })
 }
 
 export { POLYGON_CHAIN_ID }

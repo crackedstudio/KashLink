@@ -21,6 +21,24 @@ export const USDT_DECIMALS = 6
 /** The contract's own `name()`; part of the EIP-712 domain, so it must match exactly. */
 export const USDT_DOMAIN_NAME = 'USDT0'
 
+/**
+ * Service fee, charged in USDT so nobody ever needs POL.
+ *
+ * It is added on top at funding, so the recipient always gets the round number the sender chose, and
+ * it is only taken when a link is actually claimed — an unclaimed link returns in full, fee included.
+ * The floor exists because 1% of a small link is less than the gas it costs to move.
+ */
+export const FEE_BPS = 100n // 1%
+export const FEE_MIN = 100_000n // 0.10 USDT
+export const TREASURY_ADDRESS = (import.meta.env?.VITE_TREASURY_ADDRESS ?? '') as Hex
+export const FEES_ENABLED = /^0x[0-9a-fA-F]{40}$/.test(TREASURY_ADDRESS)
+
+export function feeFor(amount: bigint): bigint {
+  if (!FEES_ENABLED) return 0n
+  const percent = (amount * FEE_BPS) / 10_000n
+  return percent > FEE_MIN ? percent : FEE_MIN
+}
+
 export const USDT_ABI = [
   { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] },
   { name: 'getNonce', type: 'function', stateMutability: 'view', inputs: [{ name: 'user', type: 'address' }], outputs: [{ type: 'uint256' }] },

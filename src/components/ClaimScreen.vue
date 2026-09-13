@@ -126,7 +126,7 @@ async function claim() {
       if (!provider) throw new Error('Open this link in Nimiq Pay to claim USDT.')
       const [recipient] = await provider.request({ method: 'eth_requestAccounts' })
       if (!recipient) throw new Error('No wallet address available.')
-      await claimUsdtLink(props.secret, recipient)
+      await claimUsdtLink(props.secret, recipient, BigInt(kashlink.value!.value))
     }
     else {
       await sweepKashlink(props.secret, await getPayoutAddress())
