@@ -98,7 +98,7 @@ export async function revertLinks(links: StoredLink[]): Promise<RevertOutcome> {
       }
       saveLink({ ...link, settled: 'reverted', settledAt: Date.now() })
       statuses[link.address] = 'reverted'
-      track('reverted', link.value, link.address)
+      track('reverted', link.value, link.address, link.token ?? 'nim')
       outcome.reverted++
       outcome.links.push(link)
     }

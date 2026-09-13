@@ -143,7 +143,7 @@ async function claim() {
       await sweepKashlink(props.secret, await getPayoutAddress())
     }
     state.value = 'success'
-    if (kashlink.value) track('claimed', amount.value, kashlink.value.address)
+    if (kashlink.value) track('claimed', amount.value, kashlink.value.address, props.token)
   }
   catch (e) {
     error.value = errorMessage(e)

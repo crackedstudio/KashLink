@@ -1,12 +1,13 @@
 /**
- * Usage analytics: how many people use KashLink and how much NIM flows through it.
+ * Usage analytics: how many people use KashLink and how much value flows through it.
  *
  * SAFETY RULE — this module never reads `location`. A KashLink URL carries the link's private key in
  * its #fragment, so anything that logged the page URL would ship spendable keys to a third party.
  * Every value sent from here is passed in explicitly by the caller, and reviewed below:
  *
  *   type          which lifecycle step happened
- *   value_luna    the amount, for volume
+ *   token         nim or usdt — their units cannot be added together
+ *   value_units   the amount in that token's smallest unit, for volume
  *   link_address  the link's PUBLIC address — safe to store (spending needs the key, not the address)
  *                 and it lets any number in the dashboard be re-checked on-chain
  *   device_id     a random id generated on this device; not a wallet address, not a person
@@ -41,13 +42,14 @@ function deviceId(): string {
 }
 
 export type EventType = 'created' | 'claimed' | 'reverted'
+export type EventToken = 'nim' | 'usdt'
 
 /**
  * Records one event. Fire-and-forget: never awaited, never throws, and a failure here must never
  * affect a payment, so every error is swallowed — including the 409 a duplicate send gets from the
  * unique index, which is exactly what keeps retries from double-counting.
  */
-export function track(type: EventType, valueLuna: number, linkAddress: string): void {
+export function track(type: EventType, valueUnits: number, linkAddress: string, token: EventToken = 'nim'): void {
   if (!ENABLED) return
   try {
     fetch(`${URL_BASE}/rest/v1/events`, {
@@ -63,7 +65,8 @@ export function track(type: EventType, valueLuna: number, linkAddress: string): 
       },
       body: JSON.stringify({
         type,
-        value_luna: Math.round(valueLuna),
+        token,
+        value_units: Math.round(valueUnits),
         link_address: linkAddress,
         device_id: deviceId(),
       }),
