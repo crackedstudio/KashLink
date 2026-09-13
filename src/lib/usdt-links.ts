@@ -134,8 +134,9 @@ export async function claimUsdtLink(secret: string, recipient: Hex, value?: bigi
   const balance = await getUsdtBalance(account.address)
   if (!balance) throw new Error('This KashLink is empty. It was already claimed, or the deposit has not arrived yet.')
 
-  // A link holds the amount it promised plus its fee. Omitting `value` means sweep everything and
-  // charge nothing — that is a revert, where the sender gets their money back in full.
+  // A link holds the amount it promised plus its fee. Both claiming and reverting resolve the link
+  // and take the fee, so the sender gets the amount back rather than the total. Omitting `value`
+  // sweeps everything and charges nothing, which is the rescue path for an odd balance.
   const fee = value === undefined ? 0n : feeFor(value)
   const nonce = await getNonce(account.address)
   if (fee === 0n || value === undefined || balance < value + fee) {

@@ -89,7 +89,8 @@ export async function revertLinks(links: StoredLink[]): Promise<RevertOutcome> {
           if (!provider) throw new Error('Open KashLink in Nimiq Pay to return USDT.')
           ;[evmPayout] = await provider.request({ method: 'eth_requestAccounts' })
         }
-        await claimUsdtLink(link.secret, evmPayout as `0x${string}`)
+        // Declaring the value takes the fee, same as a claim: the link is resolved either way.
+        await claimUsdtLink(link.secret, evmPayout as `0x${string}`, BigInt(link.value))
       }
       else {
         nimPayout ??= await getPayoutAddress()

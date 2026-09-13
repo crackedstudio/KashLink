@@ -134,7 +134,7 @@ async function revert() {
             <span class="spinner" /> Reverting…
           </template>
           <template v-else>
-            {{ confirmRevert ? 'Tap again to revert' : 'Revert link' }}
+            {{ confirmRevert ? `Tap again to return ${amountText} ${unitText}` : 'Revert link' }}
           </template>
         </button>
       </template>
