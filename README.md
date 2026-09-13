@@ -1,63 +1,203 @@
 # KashLink
 
-A KashLink mini app for Nimiq Pay.
+Send money as a link. No address, no account, no gas.
 
-Send NIM to anyone with a link, like MiniPay's KashLink.
+KashLink is a [Nimiq Pay](https://nimiq.com/nimiq-pay/) mini app that turns an amount into a shareable
+link. Whoever opens it keeps the money. It carries **NIM** and **USDT on Polygon**, works inside Nimiq
+Pay and in an ordinary browser, and never asks either side to hold a gas token.
 
-**Flow:** How it works → Amount → Send to KashLink → "Your KashLink is ready" (share / copy / WhatsApp / revert).
-Whoever opens the link inside Nimiq Pay taps **Claim cash** and the NIM moves to their wallet.
+Inspired by MiniPay's Cash Link, with three things the built-in Nimiq cashlink does not do: stablecoins,
+links you can take back, and a view of what you have sent.
 
-## How it works
+---
 
-1. The app generates a throwaway Nimiq key pair. Its private key goes into the link's `#fragment`
-   (fragments are never sent to any server).
-2. You fund that address from your wallet via `sendBasicTransactionWithData` (one Nimiq Pay approval).
-3. The recipient's copy of the app signs a transaction with the link's key that sweeps the balance to
-   their own address (`listAccounts`), and broadcasts it with the in-browser Nimiq light client.
-   NIM transactions are free, so the link never needs gas.
-4. **Revert** does the same sweep back to your address. Created links are kept in `localStorage` on your
-   device (tap "Your KashLinks" on the first screen) so you can revert later.
+## How a link works
 
-Links use the same encoding as the Nimiq Hub, so someone without Nimiq Pay can also claim at
-`hub.nimiq.com/cashlink/#…` (the claim screen offers this automatically in a normal browser).
+Every link is a throwaway wallet.
 
-## How shared links open
+1. The app generates a fresh key pair and puts the **private key in the URL fragment** (`…/#<key>`).
+   Fragments are never transmitted to a server, so the key stays between the people holding the link.
+2. The sender funds that address from their wallet.
+3. The recipient's copy of the app signs a transfer **with the link's own key** and broadcasts it.
 
-Shared links look like `https://nimpay.app/miniapps/open/<your-host>/#<key>`. `nimpay.app` is a Universal
-Link (iOS) / App Link (Android) domain for Nimiq Pay, so on a phone with the app installed, tapping the link
-in WhatsApp, Messages, etc. opens Nimiq Pay **directly**, which loads KashLink on the claim screen. No browser
-step, no "Open in Nimiq Pay" tap.
+The consequence worth understanding: **whoever holds the link controls the money.** There is no
+account, no recovery, and no permission check — which is what makes it work for someone who has never
+used crypto, and why a link should be shared like cash.
 
-Without the app, the tap lands on nimpay.app, which shows an install page — but only for mini apps that are
-listed in the Nimiq Pay directory. Until KashLink is listed, that page is a 404, so:
+### The gas problem, and how each chain solves it
 
-1. Submit KashLink to the directory: add it to `src/data/nimiq-mini-apps.json` in
-   [nimiq/awesome](https://github.com/nimiq/awesome) (see its CONTRIBUTING.md). The listing is matched by
-   host, so use the same host as `VITE_PUBLIC_URL`.
-2. Until that PR is merged, build with `VITE_DIRECT_LINKS=false` to share the plain app URL instead. Those
-   links open in the browser first and show an "Open in Nimiq Pay" button (plus the Hub fallback).
+A brand-new address holds no gas, so moving money out of it should be impossible.
 
-Links that were already shared keep working either way: the raw app URL still shows the claim screen, and
-`#<key>` is never sent to a server in either form.
+| | Solution |
+| --- | --- |
+| **NIM** | Nimiq transactions are free. Nothing to solve. |
+| **USDT** | Polygon demands POL. The holder signs an EIP-712 **meta-transaction** off-chain and a relayer submits it, paying the gas. |
 
-## Develop
+Polygon's USDT exposes `executeMetaTransaction`, which is what makes the second row possible. Its
+EIP-712 domain is non-standard — the chain id lives in `salt` and there is no `chainId` field — and it
+was verified against the contract's own `DOMAIN_SEPARATOR`. Changing any part of it silently
+invalidates every signature.
+
+---
+
+## Features
+
+**Two tokens.** NIM for speed and zero fees; USDT for an amount that still means something next week.
+
+**Works in two places.** Inside Nimiq Pay the injected provider signs. In a browser the
+[Nimiq Hub](https://hub.nimiq.com) signs NIM, and any injected EVM wallet signs USDT. Claiming needs no
+wallet at all beyond an address to receive.
+
+**Links that come back.** Unclaimed links are listed with their on-chain status, and anything older
+than 7 days can be returned in one tap. This is *not* automatic: the key lives only on the sender's
+device, so the money returns when they next open the app. Putting keys somewhere a timer could reach
+them would mean custodying user funds.
+
+**A sender's view.** "2 of 5 claimed · 300 NIM still out there", per-link status, and a Return button.
+
+**Opens straight in the app.** Shared links are `nimpay.app/miniapps/open/…` URLs, a Universal Link and
+App Link domain for Nimiq Pay, so tapping one in WhatsApp opens the app directly on the claim screen.
+
+---
+
+## Fees
+
+USDT links carry a service fee; NIM links are free, because there is no gas to reimburse.
+
+| | |
+| --- | --- |
+| Rate | **1%**, minimum **$0.10** |
+| Charged to | the sender, **on top** — the recipient gets the round number |
+| Taken when | the link is resolved, whether claimed **or** reverted |
+| Cost to run | ~$0.008 of gas per link |
+
+The fee is charged on a revert as well as a claim. Otherwise a cancelled link costs the relayer gas for
+no revenue, and repeating create-then-revert would be a free way to drain it. The review screen and the
+revert button both state this before the user commits.
+
+Set `VITE_TREASURY_ADDRESS` to collect fees; leave it unset and USDT links are free.
+
+> **Honest limitation.** The fee is avoidable. A recipient holding the link's key can import it into any
+> wallet and sweep the USDT themselves. Making it unavoidable requires an escrow contract instead of a
+> plain address.
+
+---
+
+## Project layout
+
+```
+src/
+  lib/
+    kashlink.ts     NIM links: encode, decode, sweep, status, share URLs
+    usdt.ts         USDT links: encoding, EIP-712 meta-transactions, fee maths
+    usdt-links.ts   USDT funding and claiming via the relayer
+    wallet.ts       one interface over Nimiq Pay's provider and the Nimiq Hub
+    nimiq.ts        Nimiq reads and broadcasts (RPC, light client fallback)
+    links.ts        sender's links: status cache, expiry, bulk return
+    storage.ts      localStorage — link keys live here and nowhere else
+    analytics.ts    usage events (never touches the URL; see the note in the file)
+  components/       one file per screen
+supabase/
+  functions/relay/  the gas relayer
+  schema.sql        analytics table and its row-level security
+  queries.sql       dashboard queries
+```
+
+NIM links use the Nimiq Hub's cashlink encoding, so they remain compatible with the wider Nimiq
+ecosystem. USDT links use the same shape on a different curve and are served from `/u`, which lets the
+claim screen pick a chain before it reads the key.
+
+---
+
+## Development
+
+Requires Node 20.19+ or 22.12+.
 
 ```bash
 npm install
 npm run dev          # http://<your-LAN-IP>:5190
 ```
 
-Open **Nimiq Pay → Mini Apps**, enter the Network URL. Phone and computer must be on the same Wi-Fi.
+Open **Nimiq Pay → Mini Apps** and enter the Network URL printed in the terminal — not `localhost`,
+which on a phone means the phone. Both devices must share a Wi-Fi network.
 
-Test with fake money first: in Nimiq Pay long-press **Settings** for 10 s → dev menu → **Testnet**, then
-use **Get free NIM**. `npm run dev` connects the app to testnet; production builds use mainnet
-(override with `VITE_NIMIQ_NETWORK`, see `.env.example`).
+**Test NIM with fake money first.** In Nimiq Pay, long-press **Settings** for 10 seconds to reveal the
+dev menu, switch to **Testnet**, then use **Get free NIM**. `npm run dev` targets testnet by default;
+production builds target mainnet.
 
-## Ship
+USDT has no testnet path here — the relayer and contract addresses are mainnet — so test it with an
+amount you do not mind losing.
 
 ```bash
-npm run build        # static files in dist/
+npm run build        # type-check and bundle to dist/
 ```
 
-Host `dist/` on any HTTPS host (Vercel, Netlify, Cloudflare Pages) and set `VITE_PUBLIC_URL` to that URL
-so shared links point at it. Links created from a LAN dev URL only open on your Wi-Fi.
+---
+
+## Configuration
+
+All client variables are `VITE_`-prefixed and **baked in at build time**, so changing one needs a
+redeploy. See `.env.example`.
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_NIMIQ_NETWORK` | `MainAlbatross` / `TestAlbatross`. Must match Nimiq Pay's network. |
+| `VITE_PUBLIC_URL` | Public URL that shared links point at. |
+| `VITE_RELAY_URL` | Gas relayer endpoint. **Unset ⇒ USDT links are hidden.** |
+| `VITE_TREASURY_ADDRESS` | Fee destination. Unset ⇒ USDT links are free. |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Analytics. Unset ⇒ nothing is recorded. |
+| `VITE_DIRECT_LINKS` | `false` shares the plain app URL instead of the nimpay.app one. |
+| `VITE_NIMIQ_RPC_URL` / `VITE_POLYGON_RPC_URL` | Override the public RPCs. |
+
+Server-side only, set with `supabase secrets set` — never as a `VITE_` variable, which would publish it
+to every visitor:
+
+| Secret | Purpose |
+| --- | --- |
+| `RELAYER_PRIVATE_KEY` | Signs and pays for relayed transactions. |
+| `POLYGON_RPC_URL` | Optional dedicated RPC for the relayer. |
+
+---
+
+## Deployment
+
+**Frontend** — any static host. The repo is set up for Vercel (`vercel.json` handles the `/u` route and
+asset caching):
+
+```bash
+npm run build        # dist/
+```
+
+**Relayer** — a Supabase Edge Function:
+
+```bash
+supabase functions deploy relay --no-verify-jwt
+supabase secrets set RELAYER_PRIVATE_KEY=0x...
+```
+
+Then fund the relayer address with POL. Roughly **$0.008 per link**, so $5 covers about 600.
+
+**Analytics** — paste `supabase/schema.sql` into the Supabase SQL editor. It creates the table and a
+row-level security policy that lets the public key *append* events and nothing else: it cannot read the
+table, enumerate links, or erase history. Read your numbers with `supabase/queries.sql`.
+
+---
+
+## Security notes
+
+- **Link keys never leave the device.** They live in the URL fragment and `localStorage`. No server ever
+  receives one.
+- **Analytics never reads `location`.** A link URL contains a spendable key, so anything logging page
+  URLs would ship keys to a third party. Every value sent is passed explicitly; see `src/lib/analytics.ts`.
+- **The relayer is a hot wallet.** Keep only a working balance in it — that balance is the maximum
+  anyone can burn. It relays exactly one call shape (a USDT transfer above a floor), checks the sender's
+  balance, and simulates every request, refusing anything that would revert.
+- **Payouts never go to contracts.** A transfer into an HTLC or vesting contract is accepted by the
+  network and then fails, stranding the funds. Claims and reverts resolve to a basic address only.
+- **Clearing site data loses unclaimed links.** The key is the money.
+
+---
+
+## Licence
+
+MIT
