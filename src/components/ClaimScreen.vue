@@ -6,7 +6,7 @@ import { formatUsd, lunaToUsd, nimAmount } from '../lib/format'
 import { errorMessage, getProvider } from '../lib/provider'
 import { getPayoutAddress } from '../lib/wallet'
 import type { Token } from '../lib/storage'
-import { formatUsdt, parseUsdtLink } from '../lib/usdt'
+import { feeFor, formatUsdt, parseUsdtLink } from '../lib/usdt'
 import { claimUsdtLink, getUsdtBalance } from '../lib/usdt-links'
 import Icon from './Icon.vue'
 import Logo from './Logo.vue'
@@ -23,7 +23,18 @@ const error = ref<string | null>(null)
 let pollTimer: number | undefined
 
 const isUsdt = computed(() => props.token === 'usdt')
-const amount = computed(() => balance.value || kashlink.value?.value || 0)
+/**
+ * What the recipient actually gets — not what the link holds. A USDT link is funded with the amount
+ * plus its fee, so showing the raw balance would promise more than it pays out.
+ */
+const amount = computed(() => {
+  const declared = kashlink.value?.value ?? 0
+  if (!isUsdt.value) return balance.value || declared
+  if (!declared) return balance.value
+  const fee = Number(feeFor(BigInt(declared)))
+  // Short-funded links pay out whatever is there and charge nothing, so show that instead.
+  return balance.value && balance.value < declared + fee ? balance.value : declared
+})
 const amountText = computed(() => (isUsdt.value ? formatUsdt(BigInt(amount.value)) : nimAmount(amount.value)))
 const unitText = computed(() => (isUsdt.value ? 'USDT' : 'NIM'))
 const heading = computed(() => ({
