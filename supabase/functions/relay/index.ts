@@ -61,46 +61,62 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
   try {
-    const { from, functionSignature, r, s, v } = await req.json()
-
-    if (!isAddress(from)) return json({ error: 'bad from address' }, 400)
-    if (typeof functionSignature !== 'string' || !functionSignature.startsWith(TRANSFER_SELECTOR)) {
-      return json({ error: 'only USDT transfers are relayed' }, 400)
-    }
-
-    // Decode so the amount and recipient are known values, not whatever was handed to us.
-    const { args } = decodeFunctionData({ abi: ABI, data: functionSignature as `0x${string}` })
-    const [to, amount] = args as [string, bigint]
-    if (!isAddress(to)) return json({ error: 'bad recipient' }, 400)
-    if (amount < MIN_UNITS) return json({ error: 'amount too small to relay' }, 400)
-
-    // The sender must actually hold it — otherwise the transfer reverts and the gas is wasted.
-    const balance = await publicClient.readContract({
-      address: USDT_ADDRESS, abi: ABI, functionName: 'balanceOf', args: [from as `0x${string}`],
-    })
-    if (balance < amount) return json({ error: 'insufficient USDT balance' }, 400)
+    const body = await req.json()
+    // One meta-transaction, or several that must run in the order given: a claim pays the recipient
+    // and then the fee, and each consumes the next nonce, so they cannot be submitted in parallel.
+    const requests = Array.isArray(body.transactions) ? body.transactions : [body]
+    if (!requests.length || requests.length > 4) return json({ error: 'bad request' }, 400)
 
     const account = relayerAccount()
-    const call = {
-      address: USDT_ADDRESS as `0x${string}`,
-      abi: ABI,
-      functionName: 'executeMetaTransaction' as const,
-      args: [from as `0x${string}`, functionSignature as `0x${string}`, r as `0x${string}`, s as `0x${string}`, Number(v)] as const,
-      account,
-    }
-
-    // Refuse anything that would revert — a bad signature, a replayed nonce, a frozen account.
-    // This is the main defence against being made to burn gas for nothing.
-    try {
-      await publicClient.simulateContract(call)
-    }
-    catch (error) {
-      return json({ error: 'transaction would fail', detail: String((error as Error).message).slice(0, 200) }, 400)
-    }
-
     const wallet = createWalletClient({ account, chain: polygon, transport: http(RPC_URL) })
-    const hash = await wallet.writeContract(call)
-    return json({ hash })
+    const hashes: string[] = []
+
+    for (const { from, functionSignature, r, s, v } of requests) {
+      if (!isAddress(from)) return json({ error: 'bad from address' }, 400)
+      if (typeof functionSignature !== 'string' || !functionSignature.startsWith(TRANSFER_SELECTOR)) {
+        return json({ error: 'only USDT transfers are relayed' }, 400)
+      }
+
+      // Decode so the amount and recipient are known values, not whatever was handed to us.
+      const { args } = decodeFunctionData({ abi: ABI, data: functionSignature as `0x${string}` })
+      const [to, amount] = args as [string, bigint]
+      if (!isAddress(to)) return json({ error: 'bad recipient' }, 400)
+      if (amount < MIN_UNITS) return json({ error: 'amount too small to relay' }, 400)
+
+      // The sender must actually hold it — otherwise the transfer reverts and the gas is wasted.
+      const balance = await publicClient.readContract({
+        address: USDT_ADDRESS, abi: ABI, functionName: 'balanceOf', args: [from as `0x${string}`],
+      })
+      if (balance < amount) return json({ error: 'insufficient USDT balance', relayed: hashes }, 400)
+
+      const call = {
+        address: USDT_ADDRESS as `0x${string}`,
+        abi: ABI,
+        functionName: 'executeMetaTransaction' as const,
+        args: [from as `0x${string}`, functionSignature as `0x${string}`, r as `0x${string}`, s as `0x${string}`, Number(v)] as const,
+        account,
+      }
+
+      // Refuse anything that would revert — a bad signature, a replayed nonce, a frozen account.
+      // This is the main defence against being made to burn gas for nothing.
+      try {
+        await publicClient.simulateContract(call)
+      }
+      catch (error) {
+        return json({
+          error: 'transaction would fail',
+          detail: String((error as Error).message).slice(0, 200),
+          relayed: hashes,
+        }, 400)
+      }
+
+      const hash = await wallet.writeContract(call)
+      hashes.push(hash)
+      // The next one's nonce only becomes valid once this is mined, so wait before continuing.
+      if (requests.length > 1) await publicClient.waitForTransactionReceipt({ hash, timeout: 60_000 })
+    }
+
+    return json({ hash: hashes[0], hashes })
   }
   catch (error) {
     return json({ error: String((error as Error).message).slice(0, 200) }, 500)

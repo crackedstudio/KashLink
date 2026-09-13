@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { type Currency, formatNim, formatUsd, LUNA_PER_NIM, lunaToUsd } from '../lib/format'
 import type { Token } from '../lib/storage'
 import { USDT_ENABLED } from '../lib/usdt-links'
+import { feeFor } from '../lib/usdt'
 import Icon from './Icon.vue'
 
 const props = defineProps<{
@@ -60,7 +61,9 @@ const balanceText = computed(() => {
   return formatNim(props.balance)
 })
 
-const tooMuch = computed(() => props.balanceKnown && props.balance !== null && units.value > props.balance)
+/** USDT links cost the amount plus the fee, so affordability has to include it. */
+const totalUnits = computed(() => (isUsdt.value ? units.value + Number(feeFor(BigInt(units.value))) : units.value))
+const tooMuch = computed(() => props.balanceKnown && props.balance !== null && totalUnits.value > props.balance)
 const canContinue = computed(() =>
   units.value > 0 && !tooMuch.value && (!props.balanceKnown || props.balance !== null))
 
