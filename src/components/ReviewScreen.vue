@@ -33,7 +33,7 @@ const totalText = computed(() => (isUsdt.value
   ? `${formatUsdt(BigInt(props.luna) + fee.value)} USDT`
   : amount.value))
 const feeNote = computed(() => (isUsdt.value
-  ? 'Your friend receives the full amount. The fee covers sending it without you needing POL for gas.'
+  ? 'Your friend receives the full amount. The fee covers sending it without you needing gas, and is not returned if you cancel the link.'
   : 'Nimiq transactions are free, so the total is exactly what your friend receives.'))
 </script>
 
