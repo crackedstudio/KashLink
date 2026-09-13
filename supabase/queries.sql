@@ -1,47 +1,63 @@
 -- Dashboard queries. Run these in the Supabase SQL editor (it bypasses RLS, so it can read).
+-- NIM and USDT are different units, so every total is grouped by token rather than summed.
 
--- Headline numbers.
+-- Headline numbers, per token.
 select
-  count(distinct device_id)                                          as users,
-  count(*) filter (where type = 'created')                           as links_created,
-  count(*) filter (where type = 'claimed')                           as links_claimed,
-  round(sum(value_luna) filter (where type = 'created') / 1e5, 2)    as nim_sent,
-  round(sum(value_luna) filter (where type = 'claimed') / 1e5, 2)    as nim_claimed,
+  token,
+  count(distinct device_id)                                             as users,
+  count(*) filter (where type = 'created')                              as links_created,
+  count(*) filter (where type = 'claimed')                              as links_claimed,
+  round(sum(value_units) filter (where type = 'created')
+        / case token when 'nim' then 1e5 else 1e6 end, 2)               as sent,
+  round(sum(value_units) filter (where type = 'claimed')
+        / case token when 'nim' then 1e5 else 1e6 end, 2)               as claimed,
   round(100.0 * count(*) filter (where type = 'claimed')
               / nullif(count(*) filter (where type = 'created'), 0), 1) as claim_rate_pct
+from public.events
+group by token;
+
+-- Fee revenue. Charged on USDT only, 1% with a $0.10 floor, taken whenever a link is resolved
+-- (claimed or reverted), so it mirrors what should have reached the treasury.
+select
+  count(*)                                                      as links_resolved,
+  round(sum(greatest(value_units * 0.01, 100000)) / 1e6, 2)     as fees_usd
+from public.events
+where token = 'usdt' and type in ('claimed', 'reverted');
+
+-- People, not links.
+select
+  count(distinct device_id)                                                  as total_users,
+  count(distinct device_id) filter (where created_at > now() - interval '7 days') as active_7d,
+  count(distinct device_id) filter (where token = 'usdt')                    as used_usdt
 from public.events;
 
 -- Day by day.
 select
-  created_at::date                                                as day,
-  count(distinct device_id)                                       as users,
-  count(*) filter (where type = 'created')                        as created,
-  count(*) filter (where type = 'claimed')                        as claimed,
-  round(sum(value_luna) filter (where type = 'created') / 1e5, 2) as nim_sent
+  created_at::date                          as day,
+  token,
+  count(distinct device_id)                 as users,
+  count(*) filter (where type = 'created')  as created,
+  count(*) filter (where type = 'claimed')  as claimed
 from public.events
-group by day
-order by day desc;
+group by day, token
+order by day desc, token;
 
--- Typical amount people send.
+-- Typical amount sent, per token.
 select
-  round(avg(value_luna) / 1e5, 2)                                                   as avg_nim,
-  round(percentile_cont(0.5) within group (order by value_luna)::numeric / 1e5, 2)  as median_nim,
-  round(max(value_luna) / 1e5, 2)                                                   as largest_nim
+  token,
+  round(avg(value_units) / case token when 'nim' then 1e5 else 1e6 end, 2)   as avg,
+  round(percentile_cont(0.5) within group (order by value_units)::numeric
+        / case token when 'nim' then 1e5 else 1e6 end, 2)                    as median,
+  round(max(value_units) / case token when 'nim' then 1e5 else 1e6 end, 2)   as largest
 from public.events
-where type = 'created';
+where type = 'created'
+group by token;
 
--- New vs returning: how many links each device has created.
-select links_created, count(*) as devices
-from (
-  select device_id, count(*) as links_created
-  from public.events where type = 'created' group by device_id
-) t
-group by links_created
-order by links_created;
-
--- Unclaimed links still holding NIM (money in flight). Verify any row on-chain with
--- its link_address at https://nimiq.watch
-select e.link_address, round(e.value_luna / 1e5, 2) as nim, e.created_at
+-- Money still in flight: created, never claimed or reverted. Any row can be checked on-chain with
+-- its link_address — nimiq.watch for NQ addresses, polygonscan.com for 0x ones.
+select e.token, e.link_address,
+       round(e.value_units / case e.token when 'nim' then 1e5 else 1e6 end, 2) as amount,
+       e.created_at
 from public.events e
 where e.type = 'created'
   and not exists (

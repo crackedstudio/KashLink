@@ -164,7 +164,7 @@ async function send() {
         : await fundKashlink(link.address, link.value),
     }
     saveLink(funded)
-    track('created', funded.value, funded.address)
+    track('created', funded.value, funded.address, token.value)
     links.value = loadLinks()
     readyLink.value = funded
     pendingLink.value = null
